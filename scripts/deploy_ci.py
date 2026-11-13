@@ -4,9 +4,11 @@ import argparse
 import hashlib
 import json
 import shutil
+import ssl
 import subprocess
 import tempfile
 import time
+import urllib.request
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -66,6 +68,22 @@ def deploy(run_id):
         published = (ROOT / ".local/security/site/index.html").read_bytes()
         if source != published:
             raise RuntimeError("Deployed HTML differs from the GitHub artifact")
+        context = ssl.create_default_context(
+            cafile=str(ROOT / ".local/security/certs/ca.crt")
+        )
+        for attempt in range(30):
+            try:
+                with urllib.request.urlopen(
+                    "https://localhost:8443", context=context, timeout=2
+                ) as response:
+                    served = response.read()
+                break
+            except OSError:
+                if attempt == 29:
+                    raise
+                time.sleep(1)
+        if served != source:
+            raise RuntimeError("HTTPS response differs from the GitHub artifact")
         metadata = {
             "repository": REPOSITORY,
             "run_id": run_id,

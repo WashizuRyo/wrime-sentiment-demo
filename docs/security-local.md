@@ -81,6 +81,14 @@ make security-ci-watch
 配信したHTMLと成果物の一致を確認し、run ID・コミット・SHA256を `.local/security/deployment.json` へ記録する。
 AmplifyのGitHubアプリやWebhook自体を動かす実装ではない。
 
+### CI成果物の配置を実測
+
+[Checks run 43450721621](https://github.com/WashizuRyo/wrime-sentiment-demo/actions/runs/43450721621) が成功し、
+73,676 bytesの `frontend-dist` 成果物を保存した。
+これをダウンロードしてローカルへ配置し、元の成果物・配置したHTML・実際のHTTPS応答の3つが一致することを確認した。
+[配置記録](ci-deployment.json)を参照。認証付き画面のブラウザテストも、この成果物に対して実行する。
+監視モードは新しい成功runを見つけると同じ配置手順を自動実行する。
+
 ## 終了
 
 監視プロセスはCtrl+C、HTTPSだけ停止する場合は `make security-down`。

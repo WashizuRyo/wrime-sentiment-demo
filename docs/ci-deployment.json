@@ -1,0 +1,9 @@
+{
+  "repository": "WashizuRyo/wrime-sentiment-demo",
+  "run_id": 43450721621,
+  "commit": "197ca6edbb358f99c292ab68fca6990f499ee48a",
+  "branch": "feat/local-aws-emulator",
+  "index_sha256": "3df75fbcce91035213fb46fa515569201502d738331d4f2f3f0142b62180c765",
+  "deployed_at": "2026-11-13T15:17:01.282911+00:00",
+  "source": "github-actions-artifact"
+}
