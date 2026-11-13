@@ -9,6 +9,7 @@ AWS本番へのデプロイやAPI呼び出しは行っていない。
 | コンテナLambdaのInvoke | InvalidRuntimeException | 両モデルの実推論が成功 |
 | HTTP APIからコンテナLambdaを実行 | コンテナ実行が未対応のため未検証 | 両モデルで成功 |
 | 画面 → エミュレーターHTTP API → Lambda | 未検証。ローカルPython APIで代用 | ブラウザE2E 2件が成功 |
+| ECRへの実モデルpush/pull | 未検証（空イメージのメタデータのみ） | 両モデルで成功。重み全量のSHA256照合も成功 |
 | AmplifyのCloudFormation作成 | 宣言だけで実体なし | 厳格モードでCREATE_FAILED |
 | Amplifyの直接API | CreateApp/GetApp/DeleteAppが成功 | ListAppsがUnknownOperationException |
 | Amplifyのビルド・CDN配信 | 未検証 | 未検証 |
@@ -49,9 +50,10 @@ Amplifyを含むテンプレートは実際に `CREATE_FAILED` / `ROLLBACK_COMPL
 本番用テンプレートに `EnableHosting` パラメータを追加し、Flociではfalseを渡している。
 既定値はtrueなので、本番や従来のAWS EmulatorではAmplifyの宣言を維持する。
 
-モデル入りイメージは、既存の `wrime-lora:local` / `wrime-full:local` を
-FlociのECRリポジトリURIにタグ付けし、ローカルDockerから直接使用した。
-ECRにモデルのレイヤーをpushし、レジストリからpullする経路は検証していない。
+モデル入りイメージは、`wrime-lora:local` / `wrime-full:local` をFlociのECRへ実際にpushする。
+Docker pull、モデルレイヤー全量のダウンロード、重みファイルのSHA256照合を実施した。
+Lambda起動前にレジストリURIのローカルタグを削除し、Flociログのpullと、その後の実推論を確認した。
+詳細は[ECRの検証結果](ecr-roundtrip.md)を参照。
 AmplifyのCDN、IAMの本番相当の制御、実AWSでのコールドスタートも未検証。
 
 ## 再実行

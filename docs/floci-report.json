@@ -1,7 +1,7 @@
 {
   "emulator": "floci/floci:2.4.0",
   "endpoint": "http://127.0.0.1:4566",
-  "gateway_base": "http://127.0.0.1:4566/execute-api/ad554e9faf/$default",
+  "gateway_base": "http://127.0.0.1:4566/execute-api/25dc06828d/$default",
   "checks": {
     "lambda_lora": {
       "package_type": "Image",
@@ -36,7 +36,7 @@
         "2": 0.7032022476196289
       },
       "truncated": false,
-      "elapsed_ms": 65.8
+      "elapsed_ms": 52.2
     },
     {
       "model": "lora",
@@ -51,7 +51,7 @@
         "2": 0.00481261545792222
       },
       "truncated": false,
-      "elapsed_ms": 44.0
+      "elapsed_ms": 43.0
     },
     {
       "model": "lora",
@@ -66,7 +66,7 @@
         "2": 0.08083175867795944
       },
       "truncated": false,
-      "elapsed_ms": 39.7
+      "elapsed_ms": 40.2
     },
     {
       "model": "lora",
@@ -81,7 +81,7 @@
         "2": 0.30615314841270447
       },
       "truncated": true,
-      "elapsed_ms": 505.5
+      "elapsed_ms": 448.2
     },
     {
       "model": "full",
@@ -96,7 +96,7 @@
         "2": 0.7298343777656555
       },
       "truncated": false,
-      "elapsed_ms": 56.1
+      "elapsed_ms": 44.3
     },
     {
       "model": "full",
@@ -111,7 +111,7 @@
         "2": 0.012910328805446625
       },
       "truncated": false,
-      "elapsed_ms": 54.6
+      "elapsed_ms": 42.5
     },
     {
       "model": "full",
@@ -126,7 +126,7 @@
         "2": 0.055520378053188324
       },
       "truncated": false,
-      "elapsed_ms": 51.3
+      "elapsed_ms": 40.4
     },
     {
       "model": "full",
@@ -141,8 +141,8 @@
         "2": 0.47573980689048767
       },
       "truncated": true,
-      "elapsed_ms": 537.2
+      "elapsed_ms": 446.8
     }
   ],
-  "scope": "HTTP API -> container Lambda -> real model. Hosting is local Vite. Images are tagged in local Docker, not uploaded to ECR."
+  "scope": "HTTP API -> container Lambda -> real model. Hosting is local Vite. Real images are pushed to and pulled from Floci ECR before Lambda execution."
 }

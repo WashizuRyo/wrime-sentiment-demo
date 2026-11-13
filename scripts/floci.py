@@ -12,6 +12,7 @@ from pathlib import Path
 import boto3
 from botocore.config import Config
 from botocore.exceptions import ClientError, EndpointConnectionError
+from ecr_images import publish_images, verify_lambda_pulls
 
 from emulator import create_stack
 
@@ -132,7 +133,7 @@ def check(outputs):
         "gateway_base": gateway_base(outputs),
         "checks": checks,
         "requests": records,
-        "scope": "HTTP API -> container Lambda -> real model. Hosting is local Vite. Images are tagged in local Docker, not uploaded to ECR.",
+        "scope": "HTTP API -> container Lambda -> real model. Hosting is local Vite. Real images are pushed to and pulled from Floci ECR before Lambda execution.",
     }
     (ROOT / ".local/floci-report.json").write_text(
         json.dumps(report, ensure_ascii=False, indent=2) + "\n"
@@ -165,16 +166,7 @@ def main():
     cfn = client("cloudformation")
     if args.action == "up":
         images = create_stack(REGISTRY_STACK, "infra/registry.yaml", cfn_client=cfn)
-        # Tag existing images with the emulated repositories' URIs. Floci uses
-        # local Docker images directly; no fake image manifest or model upload.
-        uris = {}
-        for method, output in (
-            ("lora", "LoRAImageRepository"),
-            ("full", "FullImageRepository"),
-        ):
-            uri = images[output] + ":local"
-            subprocess.run(["docker", "tag", f"wrime-{method}:local", uri], check=True)
-            uris[output] = uri
+        uris = publish_images(client("ecr"), images)
         outputs = create_stack(
             STACK,
             "infra/app.yaml",
@@ -187,6 +179,7 @@ def main():
         )
         STATE.write_text(json.dumps(outputs, indent=2) + "\n")
         check(outputs)
+        verify_lambda_pulls()
     elif args.action == "check":
         check(json.loads(STATE.read_text()))
     else:

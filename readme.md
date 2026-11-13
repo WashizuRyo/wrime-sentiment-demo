@@ -35,7 +35,7 @@ Lambda Invokeでも両モデルが実行できる。Amplify/CDNはFlociでも未
 ```bash
 # モデル入りLambdaイメージをビルド（既に両イメージがあれば不要）
 make floci-images
-# Flociを起動し、CloudFormationでAPI・Lambda等を作り、実推論を検証
+# Flociを起動し、ECRへモデルイメージをpushし、CloudFormationでAPI・Lambda等を作って実推論を検証
 make floci-up
 # 画面を起動（通常の make frontend とはどちらか片方だけ）
 make frontend-floci
@@ -46,8 +46,11 @@ make frontend-floci
 CloudFormationは本番と同じ `infra/app.yaml` を使い、Flociでは `EnableHosting=false` を渡す。
 未対応リソースを成功扱いにする設定は無効化している。
 
-ECRリポジトリは作成するが、大きなモデルイメージのpush/pullは省略し、Flociが認めるローカルDockerイメージの再利用を使う。
-レジストリへ実際にモデルを転送する経路は、この検証には含めない。
+ECRリポジトリへ両モデルの実イメージを `docker push` し、`docker pull` とマニフェスト照合を行う。
+モデルを含むレイヤーをECRから全量ダウンロードし、展開した `model.safetensors` のSHA256も元ファイルと照合する。
+Lambda起動前にレジストリURIのローカルタグを削除し、ローカル優先を無効にして、Lambdaによるpullをログで確認する。
+Dockerの共通レイヤーはキャッシュされる場合があるが、重みファイルは両モデルとも全バイトを転送・検証している。
+初回は転送に時間と追加ディスク容量が必要。[ECR検証結果](docs/ecr-roundtrip.md)を参照。
 FlociはDockerソケットを使い、名前空間 `wrime-sentiment` で子コンテナを起動する。
 SDK接続は `127.0.0.1:4566` とダミー資格情報に固定し、AWS本番のプロファイルは使わない。
 
