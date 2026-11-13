@@ -19,7 +19,6 @@ jobs:
       - run: uv venv --python 3.12 .venv
       - run: uv pip install --python .venv/bin/python -r requirements-test.txt
       - run: .venv/bin/python -m pytest -q
-      - run: .venv/bin/cfn-lint infra/registry.yaml infra/app.yaml
       - run: npm --prefix frontend ci
       - run: npm --prefix frontend run build
 

@@ -1,140 +1,50 @@
 # WRIME Sentiment Demo
 
-WRIME Ver.2で追加学習したGemma 3 270Mを使い、日本語SNS投稿を5段階の感情極性に分類する研究用Webアプリ。
-LoRAとフルファインチューニング（Full FT）の予測を画面から比較する。
-
-![LoRAとFull FTの比較画面](docs/desktop.png)
-
-## HTTPS・認証付きのローカル実行（推奨）
-
-```bash
-make setup
-# 初回はモデル準備と make floci-images も実行（下記参照）
-make floci-up
-make security-up
-make security-check
-```
-
-更新前のFlociが起動中なら、先に `make floci-down` して新しい設定で起動し直す。
-
-- 画面: **https://localhost:8443**（ビルド済みファイルをCaddyで配信）
-- API: **https://localhost:9443**（別オリジン、Floci HTTP API → Lambda）
-- ログイン情報: ローカルの `.local/dev-user.json`。パスワードは自動生成し、Gitには含めない。
-- Cognitoのアクセストークンは画面のメモリだけに保持し、ログアウト・再読み込みで破棄する。
-- ローカル証明書はOSへ登録しない。専用ブラウザで開く場合は `make security-browser`。
-
-`make security-check` はTLS、JWTの有効・不正・期限切れ、ブラウザのCORS、IAMの許可・拒否を検証する。
-ログインと分析以外の画面説明は追加していない。
-[検証結果と詳細](docs/security-local.md)。Amplifyや世界各地のCDN拠点そのものの再現ではない。
-
-GitHubのpush/PRで自動ビルドした `frontend-dist` 成果物も、そのまま配信できる。
-
-```bash
-make security-ci-deploy  # このブランチの最新の成功ビルドを取得・配信
-make security-ci-watch  # 30秒ごとに新しい成功ビルドを確認して自動反映
-```
-
-ローカルの反映先は上のHTTPSサーバーだけ。GitHubへはローカルの鍵・パスワード・モデルを送らない。
-
-## 現在できること
-
-- React + Viteの画面から、LoRA・Full FTの実モデルをローカルCPUで呼び出す。
-- AWS公式 **AWS Emulator** でCloudFormation、ECR、Lambda、API Gateway等の作成・読み取り・削除を検証する。
-- Lambdaコンテナ用のDockerfileを用意し、本番とローカルで推論ハンドラーを共有する。
-- AWS本番環境には未デプロイ。モデル・資格情報はこの公開リポジトリに含めない。
-
-**AWS Emulator単体でこの構成を完全再現できるわけではない。**
-検証版1.0.343ではコンテナLambdaの実行が未対応で、AmplifyのCloudFormation経由の作成にも不足がある。
-そのため、実モデル推論はローカルPython、画面配信はVite、AWS APIの検証はEmulatorで行う。
-AWS公式Emulatorの構成では、ローカル画面のリクエストはEmulatorのAPI Gatewayを経由しない。
-[検証結果と制限](docs/local-validation.md)を参照。
-
-## FlociでAPI GatewayとLambdaまで通す
-
-別のエミュレーター **Floci 2.4.0** では、以下の経路を実モデルで確認できた。
+日本語の文章を5段階の感情極性に分類するローカルWebアプリ。
+WRIME Ver.2で追加学習したGemma 3 270MのLoRA・Full FTを比較する。
 
 ```text
-ブラウザ → Viteのプロキシ → FlociのHTTP API → コンテナLambda → LoRA / Full FT
+ブラウザ → React + Vite → FastAPI → 学習済みモデル
 ```
 
-ローカルPython API（ポート8000）を停止した状態でも、ブラウザテスト2件が成功。
-Lambda Invokeでも両モデルが実行できる。以下はViteを使う基本モード。認証付きの静的配信は上の推奨手順を使う。
-[比較結果](docs/emulator-comparison.md) / [HTTP APIの実測結果](docs/floci-report.json)。
+![画面](docs/desktop.png)
 
-モデル準備と `make setup` を済ませてから実行する。
+## 起動
 
-```bash
-# モデル入りLambdaイメージをビルド（既に両イメージがあれば不要）
-make floci-images
-# Flociを起動し、ECRへモデルイメージをpushし、CloudFormationでAPI・Lambda等を作って実推論を検証
-make floci-up
-# 画面を起動（通常の make frontend とはどちらか片方だけ）
-make frontend-floci
-```
-
-<http://127.0.0.1:5173> から分析する。`make api` は不要。
-`make floci-check` でLambda直接呼び出し・HTTP API経由の推論を再確認できる。
-CloudFormationは本番と同じ `infra/app.yaml` を使い、Flociでは `EnableHosting=false` を渡す。
-未対応リソースを成功扱いにする設定は無効化している。
-
-ECRリポジトリへ両モデルの実イメージを `docker push` し、`docker pull` とマニフェスト照合を行う。
-モデルを含むレイヤーをECRから全量ダウンロードし、展開した `model.safetensors` のSHA256も元ファイルと照合する。
-Lambda起動前にレジストリURIのローカルタグを削除し、ローカル優先を無効にして、Lambdaによるpullをログで確認する。
-Dockerの共通レイヤーはキャッシュされる場合があるが、重みファイルは両モデルとも全バイトを転送・検証している。
-初回は転送に時間と追加ディスク容量が必要。[ECR検証結果](docs/ecr-roundtrip.md)を参照。
-FlociはDockerソケットを使い、名前空間 `wrime-sentiment` で子コンテナを起動する。
-SDK接続は `127.0.0.1:4566` とダミー資格情報に固定し、AWS本番のプロファイルは使わない。
-
-終了時は画面のターミナルでCtrl+Cし、以下を実行する。
-
-```bash
-make floci-down
-```
-
-Lambda子コンテナ・ECRのレジストリ・Flociの停止を確認済み。ビルド済みイメージとモデルはローカルに残る。
-停止後の再作成ではAPI IDが変わるため、`make frontend-floci` も起動し直す。
-
-## AWS構成
-
-```mermaid
-flowchart TD
-    GitHub[GitHub / frontend] --> Amplify[Amplify Hosting / CDN]
-    Amplify -->|画面配信| Browser[ブラウザ]
-    Browser -->|HTTPS| API[API Gateway HTTP API]
-    API -->|POST /predict/lora| LoRA[Lambda / LoRA統合モデル]
-    API -->|POST /predict/full| Full[Lambda / Full FTモデル]
-    ECR[ECR / 非公開モデルイメージ] --> LoRA
-    ECR --> Full
-    LoRA --> Logs[CloudWatch Logs]
-    Full --> Logs
-```
-
-東京リージョン、CPU・FP32、1関数1モデル、初期メモリ4GBを想定。
-`infra/registry.yaml` と `infra/app.yaml` のCloudFormationで管理する。
-Dockerイメージのビルド・pushはCloudFormationとは別に実行する。
-Amplifyは静的ホスティング用のアプリを定義しており、GitHub接続とブランチの設定は本番公開時に追加する。
-CloudFormationは既定でCognito JWT認証を有効にする。本番のユーザー作成・運用設定は別途必要。Flociの基本検証とAWS公式Emulatorでは明示的に認証を無効にし、`make security-up` でFlociの認証を有効化する。CORSは認証の代わりにならない。
-
-## ローカル起動
-
-前提: Python 3.12、[uv](https://docs.astral.sh/uv/)、Node.js 22.12以降、Docker Compose。
-Apple Siliconではarm64で実行できる。Dockerが停止している場合はDocker DesktopやColimaを先に起動する。
+前提: Python 3.12、[uv](https://docs.astral.sh/uv/)、Node.js 22.12以降。
 
 ```bash
 make setup
 ```
 
-macOSでXcodeライセンス未同意のエラーになる場合、インストール済みのCommand Line Toolsを使って
-`DEVELOPER_DIR=/Library/Developer/CommandLineTools make setup` のように実行できる。
-他の `make` コマンドも同じ。システム全体のXcode設定を変える必要はない。
+モデル準備済みなら、ターミナルを2つ使って起動する。
 
-### 1. 学習済みモデルを準備
+```bash
+# ターミナル1: 推論API
+make api
+```
+
+```bash
+# ターミナル2: 画面
+make frontend
+```
+
+画面: **http://127.0.0.1:5173**
+API: **http://127.0.0.1:8000**
+
+ログインは不要。Viteが `/predict/*` をFastAPIへ転送する。
+初回の分析はモデルの読み込みに時間がかかる。停止は各ターミナルでCtrl+C。
+
+macOSでXcodeライセンスのエラーが出る場合、インストール済みのCommand Line Toolsを指定して
+`DEVELOPER_DIR=/Library/Developer/CommandLineTools make api` のように実行する。
+
+## モデルの準備
 
 以下を別途ローカルに用意する。
 
 - 卒論リポジトリの `thesis/experiments/full_finetuning/models/best_model`
 - 同 `thesis/experiments/lora/models/best_adapter`
-- 元の `google/gemma-3-270m` のローカルスナップショット（重みと設定を含む）
+- 元の `google/gemma-3-270m` のローカルスナップショット（重み・設定）
 
 ```bash
 .venv/bin/python scripts/prepare_models.py \
@@ -142,46 +52,11 @@ macOSでXcodeライセンス未同意のエラーになる場合、インスト�
   --base-model /path/to/local/gemma-3-270m-snapshot
 ```
 
-`models/lora` にLoRA統合モデル、`models/full` にFull FTを作る。
-LoRA統合前後のlogitsを比較してから保存する。自動ダウンロードや再学習は行わない。
-既存出力は上書きしない。作り直す場合は `--output` で新しい出力先を選び、
-API起動時に `WRIME_MODEL_ROOT` でその場所を指定する。
-モデルの保存に約2.1GB、実行用メモリには別途余裕が必要。
-
-### 2. AWS Emulatorでリソースを確認
-
-```bash
-make emulator-up
-make emulator-check
-```
-
-Dockerfileは公式Linuxパッケージの1.0.343を固定し、CPUアーキテクチャに応じて選択する。
-資格情報・CAは `.local/emulator/9297` に生成される。テレメトリーは無効。
-`scripts/emulator.py` はlocalhostとEmulatorの資格情報だけを使い、実AWSのプロファイルを使わない。
-
-この手順でECRに登録する空イメージは、作成API確認用のメタデータのみ。
-Lambdaへモデルを配置したことや、Emulator内で推論できたことを意味しない。
-結果は `.local/emulator-report.json` に出力する。再実行は `make emulator-check`、
-再作成は一度 `make emulator-down` してから行う。
-
-### 3. 実モデルのAPIと画面を起動
-
-ターミナルを2つ使う。
-
-```bash
-# ターミナル1: http://127.0.0.1:8000
-make api
-```
-
-```bash
-# ターミナル2: http://127.0.0.1:5173
-make frontend
-```
-
-ブラウザで <http://127.0.0.1:5173> を開く。
-Viteのプロキシが `/predict/*` をローカルAPIへ転送し、同じLambdaハンドラーで推論する。
-両モデルの比較、クラス別確率、切り詰め表示、APIエラーに対応。
-初回はモデルの読み込み時間がかかる。入力文章はアプリのログに保存しない。
+LoRAは分類ヘッドを含むアダプタを統合し、統合前後のlogitsを比較する。
+`models/lora` と `models/full` に推論用ファイルを作る。保存には約2.1GB必要。
+既存の出力は上書きしない。別の保存先は `--output`、APIの読み込み先は `WRIME_MODEL_ROOT` で指定できる。
+モデルは起動後に初めて使う際に読み込み、以降はメモリ上で再利用する。
+モデルファイルはGitに含めない。
 
 ## API
 
@@ -192,6 +67,8 @@ curl http://127.0.0.1:8000/predict/lora \
   -H 'Content-Type: application/json' \
   -d '{"text":"今日はとても楽しかった！"}'
 ```
+
+応答例（数値は説明用）:
 
 ```json
 {
@@ -204,92 +81,40 @@ curl http://127.0.0.1:8000/predict/lora \
 }
 ```
 
-数値は説明用。感情極性は `-2, -1, 0, +1, +2`。
-5個のスコアにsoftmaxを適用し、最大値のクラスを返す。確率は正答率を保証するものではない。
-空入力・10,000文字超過は400、64KiB超の本文は413、モデル未準備は503。
+感情極性は `-2, -1, 0, +1, +2`。softmaxの最大値に対応するクラスを返す。
+確率は正答率を保証する値ではない。
+
+- 空入力・不正JSON・10,000文字超過: 400
+- 不明なモデル: 404
+- 64KiB超のリクエスト本文: 413
+- モデル未準備: 503
+
 入力は特殊トークン込み512トークンに切り詰め、発生時は `truncated: true` を返す。
+入力文章はアプリのログに保存しない。`GET /health` でAPIの起動を確認できる。
 
 ## 検証
 
-認証付きモードは `make security-check`。以下の `make smoke` と `test:e2e` は、ローカルPython APIなど認証なしの開発モード用。
-
 ```bash
 make test
-# API起動後、実モデルで8件の推論と不正入力を確認
+# API起動後に実モデルの推論を確認
 make smoke
-# API起動後、実モデルのブラウザE2E
+# API起動後に画面を検証
 cd frontend
 npx playwright install chromium
 npm run test:e2e
 ```
 
-[2026-11-13の検証結果](docs/local-validation.md) / [モバイル画面](docs/mobile.png)
+GitHub ActionsでもAPIテストと画面のビルドを実行し、`frontend-dist` 成果物を保存する。
+[ローカル検証結果](docs/local-validation.md) / [モバイル画面](docs/mobile.png)
 
-## Lambdaコンテナのローカル確認
-
-AWS EmulatorはコンテナLambdaを実行しないため、Lambdaベースイメージに含まれる
-Runtime Interface Emulator（RIE）で別途確認できる。
-
-```bash
-docker build --platform linux/arm64 --provenance=false \
-  --build-arg MODEL_METHOD=lora -f backend/Dockerfile -t wrime-lora:local .
-docker run --rm --memory=4g --read-only --tmpfs /tmp \
-  -p 127.0.0.1:9001:8080 wrime-lora:local
-```
-
-別ターミナルからAPI Gateway形式のイベントを渡す。
-
-```bash
-curl http://127.0.0.1:9001/2015-03-31/functions/function/invocations \
-  -H 'Content-Type: application/json' \
-  -d '{"version":"2.0","body":"{\"text\":\"今日は楽しかった！\"}","isBase64Encoded":false}'
-```
-
-Full FTは `MODEL_METHOD=full` とタグを変えてビルドする。実AWSのarm64関数にも同じ形式のイメージを使う。
-RIEで動いても、AWSのIAM、ネットワーク、初期化時間、API Gatewayとの統合は別途検証が必要。
-
-## 本番へ進む前に
-
-- モデルを含む実イメージを非公開ECRへpushし、URIまたはdigestをCloudFormationへ渡す。
-- AmplifyのGitHub接続・公開ブランチを設定し、`VITE_API_BASE_URL` とCORSの公開オリジンを合わせる。
-- Cognito JWT認証と利用制限を実AWSでも検証し、本番ユーザーを管理する。フロントにAWSアクセスキーや秘密情報を埋め込まない。
-- HTTP APIの最大30秒を、Lambdaのコールドスタート込みで検証する。
-- エミュレーターではIAMの実際の許可・拒否を保証できないため、実AWSでも確認する。
-
-## 終了と費用
-
-HTTPSサーバーは `make security-down`、Floci全体は `make floci-down` で停止する。CI監視は起動したターミナルでCtrl+C。
-
-この作業は短期間の動作確認を目的とし、無料枠・クレジットによる0円は保証しない。
-ローカル実行では実AWSリソースを作らない。
-
-```bash
-# API・フロントは各ターミナルでCtrl+C
-make emulator-down
-```
-
-Emulatorの状態は停止で消える。モデルとDockerイメージはローカルに残る。
-`make emulator-down` が失敗しても `docker compose down` でEmulatorを停止すれば状態は消える。
-実AWSへ公開した場合はスタックに加え、Amplify、ECRイメージ、ログ、デプロイ用S3などの残存も確認する。
-CloudFormationの `DeletionPolicy` に注意し、ブラウザを閉じるだけで終了扱いにしない。
-
-## ディレクトリ
+## ファイル構成
 
 ```text
-frontend/   React + Vite・ブラウザテスト
-backend/    共通推論・Lambdaハンドラー・ローカルHTTPアダプター・Dockerfile
-infra/      CloudFormation YAML（レジストリ・アプリ）
-emulator/   AWS公式EmulatorのDockerfile
-scripts/    モデル準備・AWS Emulator / Floci検証・推論スモークテスト
-tests/      ハンドラー・HTTP入力検証
-docs/       検証結果・画面
+frontend/   Reactの画面・Vite設定・ブラウザテスト
+backend/    FastAPI・モデルの推論処理
+tests/      APIテスト
+scripts/    モデル準備・実推論の確認
+docs/       画面・検証結果
 ```
 
-## 参考
-
-- [Floci公式リポジトリ](https://github.com/floci-io/floci)
-- [AWS Emulator公式リポジトリ](https://github.com/aws/aws-emulator)
-- [AWS EmulatorのDocker起動](https://docs.aws.amazon.com/emulator/latest/userguide/getting-started-docker.html)
-- [AWS Emulatorの制限](https://docs.aws.amazon.com/emulator/latest/userguide/what-is-service.html)
-- [Lambdaコンテナのローカルテスト](https://docs.aws.amazon.com/lambda/latest/dg/python-image.html)
-- [HTTP APIの制限](https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-quotas.html)
+現在はフロントとAPIのローカル実行に絞る。AWSへのデプロイは別途対応する。

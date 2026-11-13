@@ -1,4 +1,4 @@
-"""CPU inference shared by Lambda and the local HTTP adapter."""
+"""CPU inference for the sentiment analysis API."""
 
 import json
 import os
