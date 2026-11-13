@@ -15,8 +15,50 @@ LoRAとフルファインチューニング（Full FT）の予測を画面から
 **AWS Emulator単体でこの構成を完全再現できるわけではない。**
 検証版1.0.343ではコンテナLambdaの実行が未対応で、AmplifyのCloudFormation経由の作成にも不足がある。
 そのため、実モデル推論はローカルPython、画面配信はVite、AWS APIの検証はEmulatorで行う。
-ローカル画面のリクエストはEmulatorのAPI Gatewayを経由しない。
+AWS公式Emulatorの構成では、ローカル画面のリクエストはEmulatorのAPI Gatewayを経由しない。
 [検証結果と制限](docs/local-validation.md)を参照。
+
+## FlociでAPI GatewayとLambdaまで通す
+
+別のエミュレーター **Floci 2.4.0** では、以下の経路を実モデルで確認できた。
+
+```text
+ブラウザ → Viteのプロキシ → FlociのHTTP API → コンテナLambda → LoRA / Full FT
+```
+
+ローカルPython API（ポート8000）を停止した状態でも、ブラウザテスト2件が成功。
+Lambda Invokeでも両モデルが実行できる。Amplify/CDNはFlociでも未対応のため、画面配信はViteを使う。
+[比較結果](docs/emulator-comparison.md) / [HTTP APIの実測結果](docs/floci-report.json)。
+
+モデル準備と `make setup` を済ませてから実行する。
+
+```bash
+# モデル入りLambdaイメージをビルド（既に両イメージがあれば不要）
+make floci-images
+# Flociを起動し、CloudFormationでAPI・Lambda等を作り、実推論を検証
+make floci-up
+# 画面を起動（通常の make frontend とはどちらか片方だけ）
+make frontend-floci
+```
+
+<http://127.0.0.1:5173> から分析する。`make api` は不要。
+`make floci-check` でLambda直接呼び出し・HTTP API経由の推論を再確認できる。
+CloudFormationは本番と同じ `infra/app.yaml` を使い、Flociでは `EnableHosting=false` を渡す。
+未対応リソースを成功扱いにする設定は無効化している。
+
+ECRリポジトリは作成するが、大きなモデルイメージのpush/pullは省略し、Flociが認めるローカルDockerイメージの再利用を使う。
+レジストリへ実際にモデルを転送する経路は、この検証には含めない。
+FlociはDockerソケットを使い、名前空間 `wrime-sentiment` で子コンテナを起動する。
+SDK接続は `127.0.0.1:4566` とダミー資格情報に固定し、AWS本番のプロファイルは使わない。
+
+終了時は画面のターミナルでCtrl+Cし、以下を実行する。
+
+```bash
+make floci-down
+```
+
+Lambda子コンテナ・ECRのレジストリ・Flociの停止を確認済み。ビルド済みイメージとモデルはローカルに残る。
+停止後の再作成ではAPI IDが変わるため、`make frontend-floci` も起動し直す。
 
 ## AWS構成
 
@@ -200,13 +242,14 @@ frontend/   React + Vite・ブラウザテスト
 backend/    共通推論・Lambdaハンドラー・ローカルHTTPアダプター・Dockerfile
 infra/      CloudFormation YAML（レジストリ・アプリ）
 emulator/   AWS公式EmulatorのDockerfile
-scripts/    モデル準備・ローカルAWS API検証・推論スモークテスト
+scripts/    モデル準備・AWS Emulator / Floci検証・推論スモークテスト
 tests/      ハンドラー・HTTP入力検証
 docs/       検証結果・画面
 ```
 
 ## 参考
 
+- [Floci公式リポジトリ](https://github.com/floci-io/floci)
 - [AWS Emulator公式リポジトリ](https://github.com/aws/aws-emulator)
 - [AWS EmulatorのDocker起動](https://docs.aws.amazon.com/emulator/latest/userguide/getting-started-docker.html)
 - [AWS Emulatorの制限](https://docs.aws.amazon.com/emulator/latest/userguide/what-is-service.html)

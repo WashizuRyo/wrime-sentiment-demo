@@ -1,5 +1,7 @@
 # ローカル検証結果
 
+Flociでの追加検証は[エミュレーター比較](emulator-comparison.md)を参照。
+
 2026-11-13にmacOS / Apple Silicon / Python 3.12 / CPUで検証。
 AWS本番環境へのデプロイや実AWSへのAPI呼び出しは行っていない。
 

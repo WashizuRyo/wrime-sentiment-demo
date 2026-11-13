@@ -1,0 +1,148 @@
+{
+  "emulator": "floci/floci:2.4.0",
+  "endpoint": "http://127.0.0.1:4566",
+  "gateway_base": "http://127.0.0.1:4566/execute-api/ad554e9faf/$default",
+  "checks": {
+    "lambda_lora": {
+      "package_type": "Image",
+      "function": "wrime-floci-app-lora",
+      "direct_invoke": 200,
+      "sentiment": 2
+    },
+    "lambda_full": {
+      "package_type": "Image",
+      "function": "wrime-floci-app-full",
+      "direct_invoke": 200,
+      "sentiment": 2
+    },
+    "empty_input": 400,
+    "ecr_repositories": 2,
+    "amplify_api": {
+      "status": "unsupported",
+      "code": "UnknownOperationException"
+    }
+  },
+  "requests": [
+    {
+      "model": "lora",
+      "input_chars": 12,
+      "model_version": "7d55d679e1c3",
+      "sentiment": 2,
+      "probabilities": {
+        "-2": 0.0007218032842501998,
+        "-1": 0.000953677692450583,
+        "0": 0.01166539080440998,
+        "1": 0.2834568917751312,
+        "2": 0.7032022476196289
+      },
+      "truncated": false,
+      "elapsed_ms": 65.8
+    },
+    {
+      "model": "lora",
+      "input_chars": 9,
+      "model_version": "7d55d679e1c3",
+      "sentiment": -2,
+      "probabilities": {
+        "-2": 0.5779100060462952,
+        "-1": 0.29891133308410645,
+        "0": 0.10825652629137039,
+        "1": 0.010109512135386467,
+        "2": 0.00481261545792222
+      },
+      "truncated": false,
+      "elapsed_ms": 44.0
+    },
+    {
+      "model": "lora",
+      "input_chars": 9,
+      "model_version": "7d55d679e1c3",
+      "sentiment": 0,
+      "probabilities": {
+        "-2": 0.05979088321328163,
+        "-1": 0.08338910341262817,
+        "0": 0.6438745856285095,
+        "1": 0.13211365044116974,
+        "2": 0.08083175867795944
+      },
+      "truncated": false,
+      "elapsed_ms": 39.7
+    },
+    {
+      "model": "lora",
+      "input_chars": 5400,
+      "model_version": "7d55d679e1c3",
+      "sentiment": 0,
+      "probabilities": {
+        "-2": 0.006723375059664249,
+        "-1": 0.03291121497750282,
+        "0": 0.5266162157058716,
+        "1": 0.12759609520435333,
+        "2": 0.30615314841270447
+      },
+      "truncated": true,
+      "elapsed_ms": 505.5
+    },
+    {
+      "model": "full",
+      "input_chars": 12,
+      "model_version": "f6f93b0f8b5d",
+      "sentiment": 2,
+      "probabilities": {
+        "-2": 0.0019601606763899326,
+        "-1": 0.0007523184176534414,
+        "0": 0.009615634568035603,
+        "1": 0.25783753395080566,
+        "2": 0.7298343777656555
+      },
+      "truncated": false,
+      "elapsed_ms": 56.1
+    },
+    {
+      "model": "full",
+      "input_chars": 9,
+      "model_version": "f6f93b0f8b5d",
+      "sentiment": -2,
+      "probabilities": {
+        "-2": 0.6821346282958984,
+        "-1": 0.16991685330867767,
+        "0": 0.11413347721099854,
+        "1": 0.020904717966914177,
+        "2": 0.012910328805446625
+      },
+      "truncated": false,
+      "elapsed_ms": 54.6
+    },
+    {
+      "model": "full",
+      "input_chars": 9,
+      "model_version": "f6f93b0f8b5d",
+      "sentiment": 0,
+      "probabilities": {
+        "-2": 0.07284650951623917,
+        "-1": 0.030014120042324066,
+        "0": 0.6530766487121582,
+        "1": 0.18854238092899323,
+        "2": 0.055520378053188324
+      },
+      "truncated": false,
+      "elapsed_ms": 51.3
+    },
+    {
+      "model": "full",
+      "input_chars": 5400,
+      "model_version": "f6f93b0f8b5d",
+      "sentiment": 2,
+      "probabilities": {
+        "-2": 0.055024996399879456,
+        "-1": 0.03267922252416611,
+        "0": 0.27532732486724854,
+        "1": 0.16122855246067047,
+        "2": 0.47573980689048767
+      },
+      "truncated": true,
+      "elapsed_ms": 537.2
+    }
+  ],
+  "scope": "HTTP API -> container Lambda -> real model. Hosting is local Vite. Images are tagged in local Docker, not uploaded to ECR."
+}

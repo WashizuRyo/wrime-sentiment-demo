@@ -1,0 +1,25 @@
+name: wrime-floci
+services:
+  floci:
+    image: floci/floci:2.4.0
+    ports:
+      - "127.0.0.1:4566:4566"
+    environment:
+      FLOCI_DOCKER_RESOURCE_NAMESPACE: wrime-sentiment
+      FLOCI_SERVICES_ECR_KEEP_RUNNING_ON_SHUTDOWN: "false"
+      FLOCI_SERVICES_CLOUDFORMATION_ALLOW_STUB_UNSUPPORTED_RESOURCE_TYPES: "false"
+      FLOCI_BASE_URL: http://127.0.0.1:4566
+      FLOCI_SERVICES_LAMBDA_DOCKER_NETWORK: wrime-floci
+      FLOCI_SERVICES_LAMBDA_DOCKER_HOST_OVERRIDE: floci
+      FLOCI_SERVICES_LAMBDA_CONTAINER_NAME_PREFIX: wrime-floci
+      FLOCI_SERVICES_LAMBDA_HONOUR_ARCHITECTURES: "true"
+      FLOCI_SERVICES_LAMBDA_WARM_POOL_MAX_PER_FUNCTION: "1"
+      FLOCI_SERVICES_LAMBDA_WARM_POOL_MAX_TOTAL: "2"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - floci
+    mem_limit: 1g
+networks:
+  floci:
+    name: wrime-floci

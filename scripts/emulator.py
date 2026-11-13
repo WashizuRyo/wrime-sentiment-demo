@@ -50,8 +50,8 @@ def client(service):
     )
 
 
-def create_stack(name, file, parameters=None):
-    cfn = client("cloudformation")
+def create_stack(name, file, parameters=None, *, cfn_client=None):
+    cfn = cfn_client if cfn_client is not None else client("cloudformation")
     cfn.create_stack(
         StackName=name,
         TemplateBody=(ROOT / file).read_text(),

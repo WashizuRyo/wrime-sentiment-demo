@@ -1,4 +1,4 @@
-.PHONY: setup emulator-up emulator-check emulator-down api frontend test smoke
+.PHONY: setup emulator-up emulator-check emulator-down api frontend test smoke floci-images floci-up floci-check floci-down frontend-floci
 setup:
 	uv venv --python 3.12 .venv
 	uv pip install --python .venv/bin/python -r requirements.lock
@@ -30,3 +30,21 @@ test:
 
 smoke:
 	.venv/bin/python scripts/smoke.py
+
+floci-images:
+	docker build --platform linux/arm64 --provenance=false --build-arg MODEL_METHOD=lora -f backend/Dockerfile -t wrime-lora:local .
+	docker build --platform linux/arm64 --provenance=false --build-arg MODEL_METHOD=full -f backend/Dockerfile -t wrime-full:local .
+
+floci-up:
+	docker compose -f compose.floci.yaml up -d
+	.venv/bin/python scripts/floci.py up
+
+floci-check:
+	.venv/bin/python scripts/floci.py check
+
+frontend-floci:
+	.venv/bin/python scripts/floci.py frontend
+
+floci-down:
+	.venv/bin/python scripts/floci.py down
+	docker compose -f compose.floci.yaml down
