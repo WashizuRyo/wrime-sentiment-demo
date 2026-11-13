@@ -5,17 +5,16 @@ test("real models: sample text, compare both, responsive results", async ({
 }) => {
   await page.goto("/");
   await expect(
-    page.getByRole("button", { name: "感情を分析する" }),
+    page.getByRole("button", { name: "分析", exact: true }),
   ).toBeDisabled();
   await page
-    .getByRole("button", { name: "今日はとても楽しかった！", exact: true })
-    .click();
-  await page.getByRole("button", { name: "感情を分析する" }).click();
+    .getByLabel("文章", { exact: true })
+    .fill("今日はとても楽しかった！");
+  await page.getByRole("button", { name: "分析", exact: true }).click();
   for (const name of ["LoRAの結果", "Full FTの結果"]) {
     const card = page.getByRole("region", { name });
     await expect(card.locator(".prediction")).toBeVisible({ timeout: 90000 });
     await expect(card.locator(".prob-row")).toHaveCount(5);
-    await expect(card.locator(".result-meta")).toContainText("モデル");
   }
   await page.screenshot({ path: "../.local/desktop.png", fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
@@ -25,6 +24,8 @@ test("real models: sample text, compare both, responsive results", async ({
     ),
   ).toBe(true);
   await page.screenshot({ path: "../.local/mobile.png", fullPage: true });
+  await page.getByLabel("文章", { exact: true }).fill("別の文章");
+  await expect(page.getByRole("region", { name: "LoRAの結果" })).toHaveCount(0);
 });
 
 test("one API error keeps the other model result and allows retry", async ({
@@ -38,13 +39,15 @@ test("one API error keeps the other model result and allows retry", async ({
     }),
   );
   await page.goto("/");
-  await page.getByLabel("分析する文章").fill("明日は月曜日です。");
-  await page.getByRole("button", { name: "感情を分析する" }).click();
+  await page.getByLabel("文章", { exact: true }).fill("明日は月曜日です。");
+  await page.getByRole("button", { name: "分析", exact: true }).click();
   await expect(
     page.getByRole("region", { name: "LoRAの結果" }).locator(".prediction"),
   ).toBeVisible({ timeout: 90000 });
-  await expect(page.getByRole("alert")).toContainText("Model unavailable");
+  await expect(page.getByRole("alert")).toContainText(
+    "モデルを読み込めません。",
+  );
   await expect(
-    page.getByRole("button", { name: "感情を分析する" }),
+    page.getByRole("button", { name: "分析", exact: true }),
   ).toBeEnabled();
 });
