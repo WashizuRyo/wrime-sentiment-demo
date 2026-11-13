@@ -1,0 +1,171 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: WRIME demo HTTP API, CPU Lambda classifiers, and Amplify static hosting
+Parameters:
+  LoRAImageUri:
+    Type: String
+  FullImageUri:
+    Type: String
+  FrontendOrigin:
+    Type: String
+    Default: http://localhost:5173
+Resources:
+  ExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: WriteFunctionLogs
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: [logs:CreateLogStream, logs:PutLogEvents]
+                Resource:
+                  - !Sub '${LoRALogGroup.Arn}'
+                  - !Sub '${FullLogGroup.Arn}'
+  LoRALogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-lora'
+      RetentionInDays: 3
+  FullLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-full'
+      RetentionInDays: 3
+  LoRAFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-lora'
+      PackageType: Image
+      Code:
+        ImageUri: !Ref LoRAImageUri
+      Role: !GetAtt ExecutionRole.Arn
+      Architectures: [arm64]
+      MemorySize: 4096
+      Timeout: 120
+      ReservedConcurrentExecutions: 1
+      Environment:
+        Variables:
+          MODEL_METHOD: lora
+          WRIME_MODEL_ROOT: /opt/models
+          HF_HUB_OFFLINE: '1'
+  FullFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-full'
+      PackageType: Image
+      Code:
+        ImageUri: !Ref FullImageUri
+      Role: !GetAtt ExecutionRole.Arn
+      Architectures: [arm64]
+      MemorySize: 4096
+      Timeout: 120
+      ReservedConcurrentExecutions: 1
+      Environment:
+        Variables:
+          MODEL_METHOD: full
+          WRIME_MODEL_ROOT: /opt/models
+          HF_HUB_OFFLINE: '1'
+  HttpApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: !Sub '${AWS::StackName}-api'
+      ProtocolType: HTTP
+      CorsConfiguration:
+        AllowOrigins: [!Ref FrontendOrigin]
+        AllowMethods: [POST]
+        AllowHeaders: [content-type]
+  LoRAIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref HttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt LoRAFunction.Arn
+      PayloadFormatVersion: '2.0'
+      TimeoutInMillis: 30000
+  FullIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref HttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt FullFunction.Arn
+      PayloadFormatVersion: '2.0'
+      TimeoutInMillis: 30000
+  LoRARoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: POST /predict/lora
+      Target: !Sub 'integrations/${LoRAIntegration}'
+  FullRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: POST /predict/full
+      Target: !Sub 'integrations/${FullIntegration}'
+  DefaultStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref HttpApi
+      StageName: '$default'
+      AutoDeploy: true
+      DefaultRouteSettings:
+        ThrottlingBurstLimit: 2
+        ThrottlingRateLimit: 1
+  LoRAInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref LoRAFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*/POST/predict/lora'
+  FullInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref FullFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*/POST/predict/full'
+  FrontendApp:
+    Type: AWS::Amplify::App
+    Properties:
+      Name: !Sub '${AWS::StackName}-frontend'
+      Platform: WEB
+      BuildSpec: |
+        version: 1
+        frontend:
+          phases:
+            preBuild:
+              commands:
+                - npm --prefix frontend ci
+            build:
+              commands:
+                - npm --prefix frontend run build
+          artifacts:
+            baseDirectory: frontend/dist
+            files:
+              - '**/*'
+          cache:
+            paths:
+              - frontend/node_modules/**/*
+      EnvironmentVariables:
+        - Name: VITE_API_BASE_URL
+          Value: !GetAtt HttpApi.ApiEndpoint
+Outputs:
+  HttpApiId:
+    Value: !Ref HttpApi
+  ApiEndpoint:
+    Value: !GetAtt HttpApi.ApiEndpoint
+  AmplifyAppId:
+    Value: !GetAtt FrontendApp.AppId
+  LoRAFunctionName:
+    Value: !Ref LoRAFunction
+  FullFunctionName:
+    Value: !Ref FullFunction

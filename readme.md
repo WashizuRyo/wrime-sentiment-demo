@@ -1,150 +1,214 @@
-# WRIME Sentiment Demo
+# WRIME Sentiment Demo — ことばの温度
 
-WRIME Ver.2で追加学習したGemma 3 270Mを使い、日本語SNS投稿の感情極性を5クラスに分類するWebアプリ。
-LoRAとフルファインチューニング（Full FT）の予測を画面から確認・比較する。
+WRIME Ver.2で追加学習したGemma 3 270Mを使い、日本語SNS投稿を5段階の感情極性に分類する研究用Webアプリ。
+LoRAとフルファインチューニング（Full FT）の予測を画面から比較する。
 
-## 現在の状態
+![LoRAとFull FTの比較画面](docs/desktop.png)
 
-構成検討段階。現時点ではREADMEのみで、フロントエンド・推論API・AWSインフラは未実装・未デプロイ。
-学習済みモデルは別途用意し、この公開リポジトリには含めない。
+## 現在できること
 
-## AWS構成（予定）
+- React + Viteの画面から、LoRA・Full FTの実モデルをローカルCPUで呼び出す。
+- AWS公式 **AWS Emulator** でCloudFormation、ECR、Lambda、API Gateway等の作成・読み取り・削除を検証する。
+- Lambdaコンテナ用のDockerfileを用意し、本番とローカルで推論ハンドラーを共有する。
+- AWS本番環境には未デプロイ。モデル・資格情報はこの公開リポジトリに含めない。
+
+**AWS Emulator単体でこの構成を完全再現できるわけではない。**
+検証版1.0.343ではコンテナLambdaの実行が未対応で、AmplifyのCloudFormation経由の作成にも不足がある。
+そのため、実モデル推論はローカルPython、画面配信はVite、AWS APIの検証はEmulatorで行う。
+ローカル画面のリクエストはEmulatorのAPI Gatewayを経由しない。
+[検証結果と制限](docs/local-validation.md)を参照。
+
+## AWS構成
 
 ```mermaid
 flowchart TD
-    GitHub[GitHub / frontend] -->|ビルド・公開| Amplify[AWS Amplify Hosting / CDN]
-    Amplify -->|HTML・CSS・JavaScript| Browser[ブラウザ]
-    Browser -->|HTTPS / 文章を送信| API[API Gateway HTTP API]
+    GitHub[GitHub / frontend] --> Amplify[Amplify Hosting / CDN]
+    Amplify -->|画面配信| Browser[ブラウザ]
+    Browser -->|HTTPS| API[API Gateway HTTP API]
     API -->|POST /predict/lora| LoRA[Lambda / LoRA統合モデル]
     API -->|POST /predict/full| Full[Lambda / Full FTモデル]
-    ECR[Amazon ECR / 非公開Dockerイメージ] -->|起動用イメージ| LoRA
-    ECR -->|起動用イメージ| Full
+    ECR[ECR / 非公開モデルイメージ] --> LoRA
+    ECR --> Full
     LoRA --> Logs[CloudWatch Logs]
     Full --> Logs
 ```
 
-| サービス | 役割 |
-| --- | --- |
-| AWS Amplify Hosting | React + Viteの静的フロントエンドをビルドし、CDN・HTTPSで配信する |
-| API Gateway HTTP API | ブラウザからの推論リクエストをLambdaに渡す |
-| AWS Lambda | CPUで感情分析を行う。LoRAとFull FTを別々の関数として配置する |
-| Amazon ECR | Python・CPU版PyTorch・依存ライブラリ・重み・tokenizerを含むイメージを非公開で保存する |
-| Amazon CloudWatch Logs | エラーや処理時間を確認する。入力文章は標準では記録しない |
-| AWS IAM | デプロイ・実行に必要な権限を管理する |
+東京リージョン、CPU・FP32、1関数1モデル、初期メモリ4GBを想定。
+`infra/registry.yaml` と `infra/app.yaml` のCloudFormationで管理する。
+Dockerイメージのビルド・pushはCloudFormationとは別に実行する。
+Amplifyは静的ホスティング用のアプリを定義しており、GitHub接続とブランチの設定は本番公開時に追加する。
+APIは認証方式未実装なので、現段階では本番公開しない。CORSは認証の代わりにならない。
 
-東京リージョンを想定する。CDNはグローバルに配信される。
-初期構成ではALB、常駐サーバー、データベース、独自ドメインは用意しない。
-ブラウザからAWSのアクセスキーを利用せず、APIの認証方式は実装時に決定する。
-CORSはフロントエンドの公開オリジンに合わせて設定する。CORS自体は認証の代わりにはならない。
+## ローカル起動
 
-## モデルと推論
+前提: Python 3.12、[uv](https://docs.astral.sh/uv/)、Node.js 22.12以降、Docker Compose。
+Apple Siliconではarm64で実行できる。Dockerが停止している場合はDocker DesktopやColimaを先に起動する。
 
-- 基盤モデル: `google/gemma-3-270m`
-- 学習データ: `shunk031/wrime` の `ver2`
-- 正解ラベル: `writer.sentiment`
-- 感情極性: `-2, -1, 0, +1, +2`
-- クラスID: `0, 1, 2, 3, 4`。APIでは元の感情極性へ戻す。
-- 入力上限: 特殊トークンを含めて512トークン。切り詰めが発生した場合は応答に含める。
-
-LoRAは保存済みアダプタ（学習済み分類ヘッドを含む）を元のGemmaに読み込み、
-`merge_and_unload()` で統合したモデルを作って配置する。
-アダプタ単体では推論できない。統合前後の予測を検証する。
-Full FTは保存済みの最良モデルを使用する。両者ともモデルと対応するtokenizerを配置する。
-
-それぞれのLambdaは1モデルだけを読み込む。モデルはハンドラーの外で初期化し、
-実行環境が再利用された場合にはメモリ上のモデルを使い回す。
-`model.eval()` と `torch.inference_mode()` を使い、推論時に学習・勾配計算は行わない。
-最後の非パディングトークン位置の分類スコアから投稿全体の感情を予測する。
-
-## 画面（予定）
-
-- 投稿文の入力欄
-- LoRA / Full FT / 両方のモデル選択
-- 分析ボタンと処理中の表示
-- 感情極性、5クラスの予測確率、処理時間の表示
-- 両モデルの結果比較
-- 入力エラー、切り詰め、タイムアウトの表示
-
-予測確率は分類スコアにsoftmaxを適用した値であり、正答率を保証する値ではない。
-
-## API（予定）
-
-- `POST /predict/lora`
-- `POST /predict/full`
-
-リクエスト例:
-
-```json
-{
-  "text": "今日はとても楽しかった！"
-}
+```bash
+make setup
 ```
 
-応答例（数値は説明用）:
+macOSでXcodeライセンス未同意のエラーになる場合、インストール済みのCommand Line Toolsを使って
+`DEVELOPER_DIR=/Library/Developer/CommandLineTools make setup` のように実行できる。
+他の `make` コマンドも同じ。システム全体のXcode設定を変える必要はない。
+
+### 1. 学習済みモデルを準備
+
+以下を別途ローカルに用意する。
+
+- 卒論リポジトリの `thesis/experiments/full_finetuning/models/best_model`
+- 同 `thesis/experiments/lora/models/best_adapter`
+- 元の `google/gemma-3-270m` のローカルスナップショット（重みと設定を含む）
+
+```bash
+.venv/bin/python scripts/prepare_models.py \
+  --thesis-root /path/to/sentimental \
+  --base-model /path/to/local/gemma-3-270m-snapshot
+```
+
+`models/lora` にLoRA統合モデル、`models/full` にFull FTを作る。
+LoRA統合前後のlogitsを比較してから保存する。自動ダウンロードや再学習は行わない。
+既存出力は上書きしない。作り直す場合は `--output` で新しい出力先を選び、
+API起動時に `WRIME_MODEL_ROOT` でその場所を指定する。
+モデルの保存に約2.1GB、実行用メモリには別途余裕が必要。
+
+### 2. AWS Emulatorでリソースを確認
+
+```bash
+make emulator-up
+make emulator-check
+```
+
+Dockerfileは公式Linuxパッケージの1.0.343を固定し、CPUアーキテクチャに応じて選択する。
+資格情報・CAは `.local/emulator/9297` に生成される。テレメトリーは無効。
+`scripts/emulator.py` はlocalhostとEmulatorの資格情報だけを使い、実AWSのプロファイルを使わない。
+
+この手順でECRに登録する空イメージは、作成API確認用のメタデータのみ。
+Lambdaへモデルを配置したことや、Emulator内で推論できたことを意味しない。
+結果は `.local/emulator-report.json` に出力する。再実行は `make emulator-check`、
+再作成は一度 `make emulator-down` してから行う。
+
+### 3. 実モデルのAPIと画面を起動
+
+ターミナルを2つ使う。
+
+```bash
+# ターミナル1: http://127.0.0.1:8000
+make api
+```
+
+```bash
+# ターミナル2: http://127.0.0.1:5173
+make frontend
+```
+
+ブラウザで <http://127.0.0.1:5173> を開く。
+Viteのプロキシが `/predict/*` をローカルAPIへ転送し、同じLambdaハンドラーで推論する。
+両モデルの比較、クラス別確率、処理時間、切り詰め表示、APIエラーに対応。
+初回はモデルの読み込み時間がかかる。入力文章はアプリのログに保存しない。
+
+## API
+
+`POST /predict/lora` または `POST /predict/full`
+
+```bash
+curl http://127.0.0.1:8000/predict/lora \
+  -H 'Content-Type: application/json' \
+  -d '{"text":"今日はとても楽しかった！"}'
+```
 
 ```json
 {
   "model": "lora",
-  "model_version": "v1",
+  "model_version": "7d55d679e1c3",
   "sentiment": 2,
-  "probabilities": {
-    "-2": 0.01,
-    "-1": 0.02,
-    "0": 0.07,
-    "1": 0.25,
-    "2": 0.65
-  },
-  "truncated": false
+  "probabilities": {"-2": 0.01, "-1": 0.02, "0": 0.07, "1": 0.25, "2": 0.65},
+  "truncated": false,
+  "elapsed_ms": 30.0
 }
 ```
 
-「両方」を選んだ場合は、フロントエンドから2つのAPIを呼び出す。
-APIのURLをフロントエンドの設定に渡す。秘密情報はフロントエンドへ埋め込まない。
+数値は説明用。感情極性は `-2, -1, 0, +1, +2`。
+5個のスコアにsoftmaxを適用し、最大値のクラスを返す。確率は正答率を保証するものではない。
+空入力・10,000文字超過は400、64KiB超の本文は413、モデル未準備は503。
+入力は特殊トークン込み512トークンに切り詰め、発生時は `truncated: true` を返す。
 
-## 実装・検証の進め方
+## 検証
 
-1. ローカルでLoRA統合モデルとFull FTモデルの推論を確認する。
-2. 推論処理をLambda用コンテナにまとめる。ライブラリとモデルの版を固定する。
-3. フロントエンドを作り、ローカルでAPIとの接続を確認する。
-4. AWS CloudFormationのYAMLテンプレートでAWS構成を定義し、スタック単位で作成・更新・削除できるようにする。DockerイメージのビルドとECRへのpushは別途実行し、イメージURIをテンプレートに渡す。
-5. AWS上で初回・実行環境再利用時・長い入力・同時アクセス時の応答時間とメモリを測る。
-6. ブラウザから両モデルの予測を確認したら、AWSリソースを削除する。
-
-Lambdaの初期検証は各関数メモリ4GB・CPU推論を想定し、測定結果に応じて調整する。
-API Gateway HTTP APIの統合タイムアウトは最大30秒のため、コールドスタートを含めて検証する。
-応答が間に合わない場合は、初期化の改善や非同期APIなど構成変更を検討する。
-
-## ディレクトリ構成（予定）
-
-```text
-frontend/   # React + Vite
-backend/    # Lambdaハンドラー・推論処理・Dockerfile
-infra/      # AWS CloudFormationのYAMLテンプレート
+```bash
+make test
+# API起動後、実モデルで8件の推論と不正入力を確認
+make smoke
+# API起動後、実モデルのブラウザE2E
+cd frontend
+npx playwright install chromium
+npm run test:e2e
 ```
 
-## 利用期間・費用・削除
+[2026-11-13の検証結果](docs/local-validation.md) / [モバイル画面](docs/mobile.png)
 
-卒論の動作確認用に短期間公開し、確認後は閉じる運用を想定する。
-既存のAWSアカウントを利用するため、新規登録向けクレジットや期間限定無料枠は前提にしない。
-Lambdaの無料枠に収まる可能性はあるが、Amplify・API Gateway・ECR・ログ等を含めた0円は保証しない。
-とくにモデル入りコンテナイメージは大きく、ECRの保存料金に注意する。
+## Lambdaコンテナのローカル確認
 
-終了時はインフラの削除に加え、以下の残存リソースを確認する。
+AWS EmulatorはコンテナLambdaを実行しないため、Lambdaベースイメージに含まれる
+Runtime Interface Emulator（RIE）で別途確認できる。
 
-- Amplifyアプリと公開ブランチ
-- API Gateway、Lambda、関連IAMロール
-- ECRイメージ・リポジトリ
-- CloudWatchのロググループ
-- デプロイ用に作成したS3オブジェクト・バケット（使用した場合。必要なものは保持）
+```bash
+docker build --platform linux/arm64 --provenance=false \
+  --build-arg MODEL_METHOD=lora -f backend/Dockerfile -t wrime-lora:local .
+docker run --rm --memory=4g --read-only --tmpfs /tmp \
+  -p 127.0.0.1:9001:8080 wrime-lora:local
+```
 
-画面やブラウザを閉じるだけでは、リソースは削除されない。
-CloudFormationのDeletionPolicyで保持されるリソースや、スタック外で作成したリソースも確認する。空でないECRリポジトリなど、削除に追加対応が必要なものも手順に含める。
+別ターミナルからAPI Gateway形式のイベントを渡す。
+
+```bash
+curl http://127.0.0.1:9001/2015-03-31/functions/function/invocations \
+  -H 'Content-Type: application/json' \
+  -d '{"version":"2.0","body":"{\"text\":\"今日は楽しかった！\"}","isBase64Encoded":false}'
+```
+
+Full FTは `MODEL_METHOD=full` とタグを変えてビルドする。実AWSのarm64関数にも同じ形式のイメージを使う。
+RIEで動いても、AWSのIAM、ネットワーク、初期化時間、API Gatewayとの統合は別途検証が必要。
+
+## 本番へ進む前に
+
+- モデルを含む実イメージを非公開ECRへpushし、URIまたはdigestをCloudFormationへ渡す。
+- AmplifyのGitHub接続・公開ブランチを設定し、`VITE_API_BASE_URL` とCORSの公開オリジンを合わせる。
+- API認証と利用制限を決める。フロントにAWSアクセスキーや秘密情報を埋め込まない。
+- HTTP APIの最大30秒を、Lambdaのコールドスタート込みで検証する。
+- エミュレーターではIAMの実際の許可・拒否を保証できないため、実AWSでも確認する。
+
+## 終了と費用
+
+この作業は短期間の動作確認を目的とし、無料枠・クレジットによる0円は保証しない。
+ローカル実行では実AWSリソースを作らない。
+
+```bash
+# API・フロントは各ターミナルでCtrl+C
+make emulator-down
+```
+
+Emulatorの状態は停止で消える。モデルとDockerイメージはローカルに残る。
+`make emulator-down` が失敗しても `docker compose down` でEmulatorを停止すれば状態は消える。
+実AWSへ公開した場合はスタックに加え、Amplify、ECRイメージ、ログ、デプロイ用S3などの残存も確認する。
+CloudFormationの `DeletionPolicy` に注意し、ブラウザを閉じるだけで終了扱いにしない。
+
+## ディレクトリ
+
+```text
+frontend/   React + Vite・ブラウザテスト
+backend/    共通推論・Lambdaハンドラー・ローカルHTTPアダプター・Dockerfile
+infra/      CloudFormation YAML（レジストリ・アプリ）
+emulator/   AWS公式EmulatorのDockerfile
+scripts/    モデル準備・ローカルAWS API検証・推論スモークテスト
+tests/      ハンドラー・HTTP入力検証
+docs/       検証結果・画面
+```
 
 ## 参考
 
-- [AWS Amplify Hosting](https://docs.aws.amazon.com/amplify/latest/userguide/welcome.html)
-- [AWS Lambdaの制限](https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html)
-- [API Gateway HTTP APIの制限](https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-quotas.html)
-- [Lambda料金](https://aws.amazon.com/lambda/pricing/)
-- [Amplify料金](https://aws.amazon.com/amplify/pricing/)
-- [ECR料金](https://aws.amazon.com/ecr/pricing/)
+- [AWS Emulator公式リポジトリ](https://github.com/aws/aws-emulator)
+- [AWS EmulatorのDocker起動](https://docs.aws.amazon.com/emulator/latest/userguide/getting-started-docker.html)
+- [AWS Emulatorの制限](https://docs.aws.amazon.com/emulator/latest/userguide/what-is-service.html)
+- [Lambdaコンテナのローカルテスト](https://docs.aws.amazon.com/lambda/latest/dg/python-image.html)
+- [HTTP APIの制限](https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-quotas.html)

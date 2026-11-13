@@ -1,0 +1,14 @@
+services:
+  emulator:
+    build: ./emulator
+    image: wrime-aws-emulator:local
+    ports:
+      - "127.0.0.1:9297:9297"
+    environment:
+      HOME: /home/emulator
+      EMULATOR_TELEMETRY: "off"
+    volumes:
+      - ./.local/emulator:/home/emulator/.aws/emulator
+    mem_limit: 2g
+    memswap_limit: 2g
+    command: ["-p", "9297"]

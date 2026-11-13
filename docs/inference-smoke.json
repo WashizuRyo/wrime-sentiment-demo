@@ -1,0 +1,58 @@
+[
+  {
+    "model": "lora",
+    "input_chars": 12,
+    "sentiment": 2,
+    "truncated": false,
+    "elapsed_ms": 22.8
+  },
+  {
+    "model": "lora",
+    "input_chars": 9,
+    "sentiment": -2,
+    "truncated": false,
+    "elapsed_ms": 22.4
+  },
+  {
+    "model": "lora",
+    "input_chars": 9,
+    "sentiment": 0,
+    "truncated": false,
+    "elapsed_ms": 23.2
+  },
+  {
+    "model": "lora",
+    "input_chars": 5400,
+    "sentiment": 0,
+    "truncated": true,
+    "elapsed_ms": 179.9
+  },
+  {
+    "model": "full",
+    "input_chars": 12,
+    "sentiment": 2,
+    "truncated": false,
+    "elapsed_ms": 2086.9
+  },
+  {
+    "model": "full",
+    "input_chars": 9,
+    "sentiment": -2,
+    "truncated": false,
+    "elapsed_ms": 24.2
+  },
+  {
+    "model": "full",
+    "input_chars": 9,
+    "sentiment": 0,
+    "truncated": false,
+    "elapsed_ms": 23.7
+  },
+  {
+    "model": "full",
+    "input_chars": 5400,
+    "sentiment": 2,
+    "truncated": true,
+    "elapsed_ms": 175.7
+  }
+]
