@@ -18,7 +18,19 @@ class RecordingPredictor:
         return {"sentiment": 2, "model": method}
 
 
-@pytest.mark.parametrize("body", ["", "{", "[]", "null", '{"text":null}', '{"text":42}', '{"text":"   "}', json.dumps({"text": "あ" * 10001})])
+@pytest.mark.parametrize(
+    "body",
+    [
+        "",
+        "{",
+        "[]",
+        "null",
+        '{"text":null}',
+        '{"text":42}',
+        '{"text":"   "}',
+        json.dumps({"text": "あ" * 10001}),
+    ],
+)
 def test_invalid_requests_never_reach_inference(body):
     engine = RecordingPredictor()
     assert handle({"body": body}, "lora", engine)["statusCode"] == 400
@@ -27,7 +39,10 @@ def test_invalid_requests_never_reach_inference(body):
 
 def test_gateway_base64_body_and_classification_method():
     engine = RecordingPredictor()
-    event = {"body": base64.b64encode('{"text":"楽しかった"}'.encode()).decode(), "isBase64Encoded": True}
+    event = {
+        "body": base64.b64encode('{"text":"楽しかった"}'.encode()).decode(),
+        "isBase64Encoded": True,
+    }
     result = handle(event, "full", engine)
     assert result["statusCode"] == 200
     assert engine.calls == [("楽しかった", "full")]
@@ -44,6 +59,7 @@ def test_missing_model_is_actionable_without_leaking_filesystem():
     class Missing:
         def predict(self, *args):
             raise ModelUnavailable("private/path")
+
     result = handle({"body": '{"text":"テスト"}'}, "lora", Missing())
     assert result["statusCode"] == 503
     assert "private/path" not in result["body"]

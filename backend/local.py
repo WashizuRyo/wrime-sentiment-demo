@@ -1,4 +1,5 @@
 """Local HTTP adapter; runs the SAME handler, not an emulated Lambda invocation."""
+
 import json
 
 from fastapi import FastAPI, Request
@@ -23,9 +24,15 @@ async def predict(method: str, request: Request):
         if len(body) > 64 * 1024:
             return JSONResponse({"error": "Request body is too large"}, status_code=413)
     event = {
-        "version": "2.0", "rawPath": f"/predict/{method}",
+        "version": "2.0",
+        "rawPath": f"/predict/{method}",
         "requestContext": {"http": {"method": "POST"}},
-        "body": body.decode("utf-8", errors="replace"), "isBase64Encoded": False,
+        "body": body.decode("utf-8", errors="replace"),
+        "isBase64Encoded": False,
     }
     result = await run_in_threadpool(handle, event, method)
-    return JSONResponse(json.loads(result["body"]), status_code=result["statusCode"], headers=result["headers"])
+    return JSONResponse(
+        json.loads(result["body"]),
+        status_code=result["statusCode"],
+        headers=result["headers"],
+    )

@@ -33,6 +33,15 @@ Full FTは保存済みの最良モデルをそのまま配置。
 - [推論結果](inference-smoke.json)の時間はこのローカル環境での参考値。
   モデルの初期ロードや並行処理の待ち時間を含む場合がある。Lambda本番の性能値ではない。
 
+## Lambda用Linuxコンテナ
+
+LoRA・Full FT両方のarm64イメージをビルドし、AWS公式のLambdaベースイメージに付属する
+Runtime Interface Emulator（RIE）で実モデルを呼び出した。
+`--memory=4g --read-only --tmpfs /tmp` の条件で両方ともHTTPプロキシ応答200、
+入力「今日はとても楽しかった！」に対し感情極性+2を返した。
+[LoRA結果](lora-rie-result.json) / [Full FT結果](full-rie-result.json)。
+RIEの実行はAWS EmulatorのLambda Invokeとは別であり、実AWS上の性能を表すものではない。
+
 ## 自動検証
 
 - pytest: 入力検証、base64のAPI Gatewayイベント、モデル選択、503、過大リクエストの12件が成功。

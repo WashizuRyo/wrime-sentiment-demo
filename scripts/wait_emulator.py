@@ -1,4 +1,5 @@
 """Wait at most 60 seconds for the local emulator, with TLS verification."""
+
 import ssl
 import time
 import urllib.error
@@ -9,7 +10,9 @@ ca = Path(__file__).resolve().parents[1] / ".local/emulator/9297/ca.pem"
 for _ in range(60):
     try:
         context = ssl.create_default_context(cafile=str(ca))
-        with urllib.request.urlopen("https://127.0.0.1:9297/__admin/health", context=context, timeout=1) as response:
+        with urllib.request.urlopen(
+            "https://127.0.0.1:9297/__admin/health", context=context, timeout=1
+        ) as response:
             if response.status == 200:
                 print("AWS Emulator is ready")
                 break

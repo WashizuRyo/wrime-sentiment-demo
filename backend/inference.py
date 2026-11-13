@@ -1,4 +1,5 @@
 """CPU inference shared by Lambda and the local HTTP adapter."""
+
 import json
 import os
 import threading
@@ -32,7 +33,9 @@ class Predictor:
             torch.set_num_threads(int(os.environ.get("TORCH_NUM_THREADS", "2")))
             tokenizer = AutoTokenizer.from_pretrained(path, local_files_only=True)
             model = Gemma3TextForSequenceClassification.from_pretrained(
-                path, dtype=torch.float32, local_files_only=True,
+                path,
+                dtype=torch.float32,
+                local_files_only=True,
             ).eval()
             if model.config.num_labels != 5:
                 raise ModelUnavailable("Expected a five-class classifier")
@@ -47,14 +50,18 @@ class Predictor:
         if method not in METHODS:
             raise ValueError("Unknown model")
         if not isinstance(text, str) or not text.strip() or len(text) > MAX_CHARS:
-            raise ValueError("text must be a non-empty string of at most 10000 characters")
+            raise ValueError(
+                "text must be a non-empty string of at most 10000 characters"
+            )
         start = time.perf_counter()
         with self._lock:
             import torch
 
             tokenizer, model, version = self._load(method)
             token_count = len(tokenizer(text, truncation=False)["input_ids"])
-            inputs = tokenizer(text, truncation=True, max_length=MAX_TOKENS, return_tensors="pt")
+            inputs = tokenizer(
+                text, truncation=True, max_length=MAX_TOKENS, return_tensors="pt"
+            )
             with torch.inference_mode():
                 logits = model(**inputs).logits[0]
                 probabilities = logits.softmax(dim=-1).tolist()
