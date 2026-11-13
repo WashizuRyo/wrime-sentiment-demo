@@ -1,6 +1,14 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: WRIME demo HTTP API, CPU Lambda classifiers, and Amplify static hosting
 Parameters:
+  EnableApiAuth:
+    Type: String
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+  AuthIssuerBaseUrl:
+    Type: String
+    Default: ''
+    Description: Local Cognito issuer base URL; leave empty on AWS.
   EnableHosting:
     Type: String
     Default: 'true'
@@ -14,8 +22,51 @@ Parameters:
     Type: String
     Default: http://localhost:5173
 Conditions:
+  CreateAuth: !Equals [!Ref EnableApiAuth, 'true']
+  LocalIssuer: !Not [!Equals [!Ref AuthIssuerBaseUrl, '']]
   CreateHosting: !Equals [!Ref EnableHosting, 'true']
 Resources:
+  UserPool:
+    Condition: CreateAuth
+    Type: AWS::Cognito::UserPool
+    Properties:
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: true
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 12
+          RequireLowercase: true
+          RequireUppercase: true
+          RequireNumbers: true
+          RequireSymbols: true
+  UserPoolClient:
+    Condition: CreateAuth
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      UserPoolId: !Ref UserPool
+      GenerateSecret: false
+      ExplicitAuthFlows: [ALLOW_USER_PASSWORD_AUTH, ALLOW_REFRESH_TOKEN_AUTH]
+      PreventUserExistenceErrors: ENABLED
+      AccessTokenValidity: 5
+      IdTokenValidity: 5
+      TokenValidityUnits:
+        AccessToken: minutes
+        IdToken: minutes
+        RefreshToken: days
+  JwtAuthorizer:
+    Condition: CreateAuth
+    Type: AWS::ApiGatewayV2::Authorizer
+    Properties:
+      ApiId: !Ref HttpApi
+      Name: CognitoJwt
+      AuthorizerType: JWT
+      IdentitySource: ['$request.header.Authorization']
+      JwtConfiguration:
+        Audience: [!Ref UserPoolClient]
+        Issuer: !If
+          - LocalIssuer
+          - !Sub '${AuthIssuerBaseUrl}/${UserPool}'
+          - !Sub 'https://cognito-idp.${AWS::Region}.${AWS::URLSuffix}/${UserPool}'
   ExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -88,7 +139,7 @@ Resources:
       CorsConfiguration:
         AllowOrigins: [!Ref FrontendOrigin]
         AllowMethods: [POST]
-        AllowHeaders: [content-type]
+        AllowHeaders: [content-type, authorization]
   LoRAIntegration:
     Type: AWS::ApiGatewayV2::Integration
     Properties:
@@ -108,12 +159,18 @@ Resources:
   LoRARoute:
     Type: AWS::ApiGatewayV2::Route
     Properties:
+      AuthorizationType: !If [CreateAuth, JWT, NONE]
+      AuthorizerId: !If [CreateAuth, !Ref JwtAuthorizer, !Ref 'AWS::NoValue']
+      AuthorizationScopes: !If [CreateAuth, [aws.cognito.signin.user.admin], !Ref 'AWS::NoValue']
       ApiId: !Ref HttpApi
       RouteKey: POST /predict/lora
       Target: !Sub 'integrations/${LoRAIntegration}'
   FullRoute:
     Type: AWS::ApiGatewayV2::Route
     Properties:
+      AuthorizationType: !If [CreateAuth, JWT, NONE]
+      AuthorizerId: !If [CreateAuth, !Ref JwtAuthorizer, !Ref 'AWS::NoValue']
+      AuthorizationScopes: !If [CreateAuth, [aws.cognito.signin.user.admin], !Ref 'AWS::NoValue']
       ApiId: !Ref HttpApi
       RouteKey: POST /predict/full
       Target: !Sub 'integrations/${FullIntegration}'
@@ -166,7 +223,20 @@ Resources:
       EnvironmentVariables:
         - Name: VITE_API_BASE_URL
           Value: !GetAtt HttpApi.ApiEndpoint
+        - Name: VITE_COGNITO_CLIENT_ID
+          Value: !If [CreateAuth, !Ref UserPoolClient, '']
+        - Name: VITE_COGNITO_ENDPOINT
+          Value: !Sub 'https://cognito-idp.${AWS::Region}.${AWS::URLSuffix}'
 Outputs:
+  UserPoolId:
+    Condition: CreateAuth
+    Value: !Ref UserPool
+  CognitoClientId:
+    Condition: CreateAuth
+    Value: !Ref UserPoolClient
+  JwtAuthorizerId:
+    Condition: CreateAuth
+    Value: !Ref JwtAuthorizer
   HttpApiId:
     Value: !Ref HttpApi
   ApiEndpoint:

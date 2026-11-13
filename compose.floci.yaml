@@ -5,6 +5,11 @@ services:
     ports:
       - "127.0.0.1:4566:4566"
     environment:
+      FLOCI_AUTH_VALIDATE_SIGNATURES: "true"
+      FLOCI_SERVICES_IAM_SEED_DEPLOYER_PRINCIPAL: "true"
+      FLOCI_SERVICES_IAM_ENFORCEMENT_ENABLED: "true"
+      FLOCI_SECURITY_ALLOW_PRIVATE_JWT_TARGETS: "true"
+      FLOCI_SERVICES_COGNITO_ENFORCE_TOKEN_VALIDITY_LIMITS: "false"
       FLOCI_DOCKER_RESOURCE_NAMESPACE: wrime-sentiment
       FLOCI_SERVICES_ECR_URI_STYLE: path
       FLOCI_SERVICES_ECR_PREFER_LOCAL_IMAGES: "false"
@@ -22,6 +27,24 @@ services:
     networks:
       - floci
     mem_limit: 1g
+  web:
+    image: caddy:2-alpine@sha256:003a97808e781aa9f7e75cc2f43d34d461099031faf5e20faefb9f61126836f0
+    profiles: [security]
+    ports:
+      - "127.0.0.1:8443:8443"
+      - "127.0.0.1:8445:8445"
+      - "127.0.0.1:9443:9443"
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ./.local/security/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./.local/security/certs:/certs:ro
+      - ./.local/security/site:/srv:ro
+    tmpfs:
+      - /data
+      - /config
+    networks: [floci]
+    mem_limit: 128m
+
 networks:
   floci:
     name: wrime-floci

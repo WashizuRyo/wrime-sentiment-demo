@@ -55,9 +55,9 @@ Docker pullでは既存レイヤーがキャッシュされる場合がある。
 ## 本番と異なる部分
 
 - ローカルHTTPのパス形式URIを使う。AWS本番ECRのHTTPSは未検証。
-- GetAuthorizationTokenとdocker loginは実行するが、Flociは本番相当の認証・IAMを評価しない。
+- GetAuthorizationTokenとdocker loginは実行するが、レジストリのDocker認証は本番相当には強制されない。ECR管理APIのIAM・署名評価は[追加検証](security-local.md)で確認。
 - Dockerのログイン情報は `.local/floci-docker` に隔離し、通常のDocker設定は変更しない。
 - Dockerレジストリやモデルのディスク容量は追加で必要。実AWSの保存料金は発生しない。
-- Amplify/CDNは引き続き未対応で、画面はViteから配信する。
+- Amplify/CDNそのものは未対応。画面は[追加実装](security-local.md)でビルド済みファイルをHTTPS配信できる。
 
 [Floci ECRの公式資料](https://github.com/floci-io/floci/blob/2.4.0/docs/services/ecr.md)

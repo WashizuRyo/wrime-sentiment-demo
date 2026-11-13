@@ -6,6 +6,11 @@ export default defineConfig({
   server: {
     strictPort: true,
     proxy: {
+      "/auth": {
+        target: "http://127.0.0.1:4566",
+        rewrite: () => "/",
+        changeOrigin: true,
+      },
       "/predict": {
         target: process.env.WRIME_LOCAL_API_TARGET || "http://127.0.0.1:8000",
         changeOrigin: true,

@@ -13,6 +13,7 @@ import boto3
 from botocore.config import Config
 from botocore.exceptions import ClientError, EndpointConnectionError
 from ecr_images import publish_images, verify_lambda_pulls
+from local_auth import access_token
 
 from emulator import create_stack
 
@@ -25,8 +26,8 @@ ENDPOINT = "http://127.0.0.1:4566"
 
 def client(service):
     return boto3.Session(
-        aws_access_key_id="test",
-        aws_secret_access_key="test",
+        aws_access_key_id="floci",
+        aws_secret_access_key="floci",
         region_name="ap-northeast-1",
     ).client(
         service,
@@ -53,11 +54,14 @@ def gateway_base(outputs):
     return f"{ENDPOINT}/execute-api/{outputs['HttpApiId']}/$default"
 
 
-def request(base, method, text):
+def request(base, method, text, token=None):
     req = urllib.request.Request(
         f"{base}/predict/{method}",
         data=json.dumps({"text": text}).encode(),
-        headers={"Content-Type": "application/json"},
+        headers={
+            "Content-Type": "application/json",
+            **({"Authorization": "Bearer " + token} if token else {}),
+        },
     )
     try:
         with urllib.request.urlopen(req, timeout=120) as response:
@@ -67,6 +71,11 @@ def request(base, method, text):
 
 
 def check(outputs):
+    token = (
+        access_token(client("cognito-idp"), outputs)
+        if outputs.get("CognitoClientId")
+        else None
+    )
     checks = {}
     for method in ("lora", "full"):
         fn = client("lambda").get_function(FunctionName=f"{STACK}-{method}")[
@@ -103,7 +112,7 @@ def check(outputs):
             ("明日は月曜日です。", False),
             ("今日は楽しかった。" * 600, True),
         ):
-            status, result = request(gateway_base(outputs), method, text)
+            status, result = request(gateway_base(outputs), method, text, token)
             assert status == 200, (status, result)
             assert result["model"] == method
             assert set(result["probabilities"]) == {"-2", "-1", "0", "1", "2"}
@@ -113,7 +122,7 @@ def check(outputs):
             )
             assert result["truncated"] == truncated
             records.append({"model": method, "input_chars": len(text), **result})
-    status, _ = request(gateway_base(outputs), "lora", "")
+    status, _ = request(gateway_base(outputs), "lora", "", token)
     assert status == 400
     checks["empty_input"] = status
     repositories = client("ecr").describe_repositories()["repositories"]
@@ -133,7 +142,7 @@ def check(outputs):
         "gateway_base": gateway_base(outputs),
         "checks": checks,
         "requests": records,
-        "scope": "HTTP API -> container Lambda -> real model. Hosting is local Vite. Real images are pushed to and pulled from Floci ECR before Lambda execution.",
+        "scope": "HTTP API -> container Lambda -> real model. Frontend delivery is tested separately. Real images are pushed to and pulled from Floci ECR before Lambda execution.",
     }
     (ROOT / ".local/floci-report.json").write_text(
         json.dumps(report, ensure_ascii=False, indent=2) + "\n"
@@ -147,7 +156,12 @@ def main():
     args = parser.parse_args()
     if args.action == "frontend":
         outputs = json.loads(STATE.read_text())
-        env = dict(os.environ, WRIME_LOCAL_API_TARGET=gateway_base(outputs))
+        env = dict(
+            os.environ,
+            WRIME_LOCAL_API_TARGET=gateway_base(outputs),
+            VITE_COGNITO_CLIENT_ID=outputs.get("CognitoClientId", ""),
+            VITE_COGNITO_ENDPOINT="/auth",
+        )
         print(f"Vite proxy -> {env['WRIME_LOCAL_API_TARGET']}", flush=True)
         subprocess.run(
             ["npm", "--prefix", "frontend", "run", "dev"], cwd=ROOT, env=env, check=True
@@ -174,6 +188,7 @@ def main():
                 "LoRAImageUri": uris["LoRAImageRepository"],
                 "FullImageUri": uris["FullImageRepository"],
                 "EnableHosting": "false",
+                "EnableApiAuth": "false",
             },
             cfn_client=cfn,
         )

@@ -1,4 +1,4 @@
-.PHONY: setup emulator-up emulator-check emulator-down api frontend test smoke floci-images floci-up floci-check floci-down frontend-floci
+.PHONY: security-up security-check security-down security-browser security-ci-deploy security-ci-watch setup emulator-up emulator-check emulator-down api frontend test smoke floci-images floci-up floci-check floci-down frontend-floci
 setup:
 	uv venv --python 3.12 .venv
 	uv pip install --python .venv/bin/python -r requirements.lock
@@ -47,4 +47,23 @@ frontend-floci:
 
 floci-down:
 	.venv/bin/python scripts/floci.py down
-	docker compose -f compose.floci.yaml down
+	docker compose -f compose.floci.yaml --profile security down
+
+security-up:
+	.venv/bin/python scripts/security_setup.py
+
+security-check:
+	.venv/bin/python scripts/security_check.py
+	npm --prefix frontend run test:secure
+
+security-down:
+	docker compose -f compose.floci.yaml --profile security stop web
+
+security-browser:
+	cd frontend && node security-browser.mjs
+
+security-ci-deploy:
+	.venv/bin/python scripts/deploy_ci.py
+
+security-ci-watch:
+	.venv/bin/python scripts/deploy_ci.py --watch

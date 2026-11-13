@@ -17,6 +17,8 @@ AWS本番へのデプロイやAPI呼び出しは行っていない。
 LocalStackの現行版は公式資料上で起動に認証トークンが必要なため、今回は実行していない。
 無料で登録なしに動かせるFlociを実際の比較対象にした。
 
+認証・HTTPS・静的配信・IAMの追加検証は[こちら](security-local.md)。以下は基本モードの検証記録。
+
 ## Flociで成功した経路
 
 ```text
@@ -54,7 +56,7 @@ Amplifyを含むテンプレートは実際に `CREATE_FAILED` / `ROLLBACK_COMPL
 Docker pull、モデルレイヤー全量のダウンロード、重みファイルのSHA256照合を実施した。
 Lambda起動前にレジストリURIのローカルタグを削除し、Flociログのpullと、その後の実推論を確認した。
 詳細は[ECRの検証結果](ecr-roundtrip.md)を参照。
-AmplifyのCDN、IAMの本番相当の制御、実AWSでのコールドスタートも未検証。
+AmplifyのCDNや実AWSでのコールドスタートは未検証。IAMは追加でローカルの許可・拒否を確認したが、AWS全体との完全な一致は保証しない。
 
 ## 再実行
 

@@ -5,6 +5,37 @@ LoRAとフルファインチューニング（Full FT）の予測を画面から
 
 ![LoRAとFull FTの比較画面](docs/desktop.png)
 
+## HTTPS・認証付きのローカル実行（推奨）
+
+```bash
+make setup
+# 初回はモデル準備と make floci-images も実行（下記参照）
+make floci-up
+make security-up
+make security-check
+```
+
+更新前のFlociが起動中なら、先に `make floci-down` して新しい設定で起動し直す。
+
+- 画面: **https://localhost:8443**（ビルド済みファイルをCaddyで配信）
+- API: **https://localhost:9443**（別オリジン、Floci HTTP API → Lambda）
+- ログイン情報: ローカルの `.local/dev-user.json`。パスワードは自動生成し、Gitには含めない。
+- Cognitoのアクセストークンは画面のメモリだけに保持し、ログアウト・再読み込みで破棄する。
+- ローカル証明書はOSへ登録しない。専用ブラウザで開く場合は `make security-browser`。
+
+`make security-check` はTLS、JWTの有効・不正・期限切れ、ブラウザのCORS、IAMの許可・拒否を検証する。
+ログインと分析以外の画面説明は追加していない。
+[検証結果と詳細](docs/security-local.md)。Amplifyや世界各地のCDN拠点そのものの再現ではない。
+
+GitHubのpush/PRで自動ビルドした `frontend-dist` 成果物も、そのまま配信できる。
+
+```bash
+make security-ci-deploy  # このブランチの最新の成功ビルドを取得・配信
+make security-ci-watch  # 30秒ごとに新しい成功ビルドを確認して自動反映
+```
+
+ローカルの反映先は上のHTTPSサーバーだけ。GitHubへはローカルの鍵・パスワード・モデルを送らない。
+
 ## 現在できること
 
 - React + Viteの画面から、LoRA・Full FTの実モデルをローカルCPUで呼び出す。
@@ -27,7 +58,7 @@ AWS公式Emulatorの構成では、ローカル画面のリクエストはEmulat
 ```
 
 ローカルPython API（ポート8000）を停止した状態でも、ブラウザテスト2件が成功。
-Lambda Invokeでも両モデルが実行できる。Amplify/CDNはFlociでも未対応のため、画面配信はViteを使う。
+Lambda Invokeでも両モデルが実行できる。以下はViteを使う基本モード。認証付きの静的配信は上の推奨手順を使う。
 [比較結果](docs/emulator-comparison.md) / [HTTP APIの実測結果](docs/floci-report.json)。
 
 モデル準備と `make setup` を済ませてから実行する。
@@ -82,7 +113,7 @@ flowchart TD
 `infra/registry.yaml` と `infra/app.yaml` のCloudFormationで管理する。
 Dockerイメージのビルド・pushはCloudFormationとは別に実行する。
 Amplifyは静的ホスティング用のアプリを定義しており、GitHub接続とブランチの設定は本番公開時に追加する。
-APIは認証方式未実装なので、現段階では本番公開しない。CORSは認証の代わりにならない。
+CloudFormationは既定でCognito JWT認証を有効にする。本番のユーザー作成・運用設定は別途必要。Flociの基本検証とAWS公式Emulatorでは明示的に認証を無効にし、`make security-up` でFlociの認証を有効化する。CORSは認証の代わりにならない。
 
 ## ローカル起動
 
@@ -180,6 +211,8 @@ curl http://127.0.0.1:8000/predict/lora \
 
 ## 検証
 
+認証付きモードは `make security-check`。以下の `make smoke` と `test:e2e` は、ローカルPython APIなど認証なしの開発モード用。
+
 ```bash
 make test
 # API起動後、実モデルで8件の推論と不正入力を確認
@@ -219,11 +252,13 @@ RIEで動いても、AWSのIAM、ネットワーク、初期化時間、API Gate
 
 - モデルを含む実イメージを非公開ECRへpushし、URIまたはdigestをCloudFormationへ渡す。
 - AmplifyのGitHub接続・公開ブランチを設定し、`VITE_API_BASE_URL` とCORSの公開オリジンを合わせる。
-- API認証と利用制限を決める。フロントにAWSアクセスキーや秘密情報を埋め込まない。
+- Cognito JWT認証と利用制限を実AWSでも検証し、本番ユーザーを管理する。フロントにAWSアクセスキーや秘密情報を埋め込まない。
 - HTTP APIの最大30秒を、Lambdaのコールドスタート込みで検証する。
 - エミュレーターではIAMの実際の許可・拒否を保証できないため、実AWSでも確認する。
 
 ## 終了と費用
+
+HTTPSサーバーは `make security-down`、Floci全体は `make floci-down` で停止する。CI監視は起動したターミナルでCtrl+C。
 
 この作業は短期間の動作確認を目的とし、無料枠・クレジットによる0円は保証しない。
 ローカル実行では実AWSリソースを作らない。

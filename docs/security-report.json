@@ -1,0 +1,37 @@
+{
+  "origins": {
+    "frontend": "https://localhost:8443",
+    "api": "https://localhost:9443"
+  },
+  "checks": {
+    "trusted_https": 200,
+    "untrusted_ca_rejected": true,
+    "local_domain_san": true,
+    "wrong_hostname_rejected": true,
+    "html_cache": "no-cache and ETag 304",
+    "hashed_asset_cache": "public, max-age=31536000, immutable",
+    "runtime_config_cache": "no-store",
+    "missing_token": 401,
+    "invalid_signature": 401,
+    "id_token_missing_scope": 403,
+    "valid_access_token": 200,
+    "allowed_preflight": {
+      "status": 204,
+      "origin_allowed": true
+    },
+    "disallowed_preflight": {
+      "status": 204,
+      "origin_allowed": false
+    },
+    "wrong_audience": 401,
+    "expired_token": 401,
+    "iam": {
+      "no_policy": "AccessDeniedException",
+      "allowed_read": 200,
+      "other_read_denied": "AccessDeniedException",
+      "wrong_signature": "InvalidSignatureException",
+      "explicit_deny_over_allow": "AccessDeniedException"
+    }
+  },
+  "scope": "Local TLS and JWT/CORS/IAM checks; not a guarantee of AWS-wide policy or CDN fidelity. No credentials or JWTs are included."
+}

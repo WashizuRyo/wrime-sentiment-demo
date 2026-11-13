@@ -236,6 +236,7 @@ def main():
             {
                 "LoRAImageUri": images["LoRAImageRepository"] + ":local",
                 "FullImageUri": images["FullImageRepository"] + ":local",
+                "EnableApiAuth": "false",
             },
         )
         state_file.write_text(json.dumps(outputs, indent=2) + "\n")

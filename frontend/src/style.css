@@ -225,3 +225,41 @@ legend {
     grid-template-columns: 1fr;
   }
 }
+
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.login-form {
+  max-width: 420px;
+  display: grid;
+  gap: 12px;
+}
+.login-form label {
+  font-size: 14px;
+}
+.login-form input {
+  width: 100%;
+  border: 1px solid var(--border);
+  background: var(--input);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+.login-form .submit {
+  margin-top: 8px;
+}
+.logout {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--muted);
+  border-radius: 7px;
+  padding: 6px 10px;
+  font-size: 12px;
+}
+input:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 4px;
+}
