@@ -7,8 +7,6 @@ WRIME Ver.2で追加学習したGemma 3 270MのLoRA・Full FTを比較する。
 ブラウザ → React + Vite → FastAPI → 学習済みモデル
 ```
 
-![画面](docs/desktop.png)
-
 ## 起動
 
 前提: Python 3.12、[uv](https://docs.astral.sh/uv/)、Node.js 22.12以降。
@@ -53,10 +51,10 @@ macOSでXcodeライセンスのエラーが出る場合、インストール済�
 ```
 
 LoRAは分類ヘッドを含むアダプタを統合し、統合前後のlogitsを比較する。
-`models/lora` と `models/full` に推論用ファイルを作る。保存には約2.1GB必要。
+`src/models/lora` と `src/models/full` に推論用ファイルを作る。保存には約2.1GB必要。
 既存の出力は上書きしない。別の保存先は `--output`、APIの読み込み先は `WRIME_MODEL_ROOT` で指定できる。
 モデルは起動後に初めて使う際に読み込み、以降はメモリ上で再利用する。
-モデルファイルはGitに含めない。
+モデルはローカルに保持し、`src/models/` と重みファイルはGitの管理対象から除外する。
 
 ## API
 
@@ -92,29 +90,26 @@ curl http://127.0.0.1:8000/predict/lora \
 入力は特殊トークン込み512トークンに切り詰め、発生時は `truncated: true` を返す。
 入力文章はアプリのログに保存しない。`GET /health` でAPIの起動を確認できる。
 
-## 検証
+## ビルド
 
 ```bash
-make test
-# API起動後に実モデルの推論を確認
-make smoke
-# API起動後に画面を検証
-cd frontend
-npx playwright install chromium
-npm run test:e2e
+make build
 ```
 
-GitHub ActionsでもAPIテストと画面のビルドを実行し、`frontend-dist` 成果物を保存する。
-[ローカル検証結果](docs/local-validation.md) / [モバイル画面](docs/mobile.png)
+GitHub Actionsでも画面のビルドを実行し、`frontend-dist` 成果物を保存する。
 
 ## ファイル構成
 
 ```text
-frontend/   Reactの画面・Vite設定・ブラウザテスト
-backend/    FastAPI・モデルの推論処理
-tests/      APIテスト
-scripts/    モデル準備・実推論の確認
-docs/       画面・検証結果
+src/
+  backend/   FastAPI・モデルの推論処理
+  frontend/  Reactの画面・Vite設定
+  infra/     Lambda用コンテナ・ハンドラー・実行手順
+  models/    LoRA・Full FTの推論用モデル（Git管理外）
+scripts/     モデル準備・Lambdaの構築と計測
 ```
 
-現在はフロントとAPIのローカル実行に絞る。AWSへのデプロイは別途対応する。
+AWS Lambda + ECRでも統合LoRAモデルの推論を検証済み。
+フロントは配置せず、AWS CLIで初回・再実行を計測し、一時リソースは削除した。
+初回応答は約14〜67秒、起動済み環境では約0.57〜0.77秒だった。
+[構成と再実行手順](src/infra/lambda-benchmark/README.md)

@@ -17,7 +17,11 @@ class ModelUnavailable(RuntimeError):
 
 class Predictor:
     def __init__(self, root=None):
-        self.root = Path(root or os.environ.get("WRIME_MODEL_ROOT", "models"))
+        self.root = Path(
+            root
+            or os.environ.get("WRIME_MODEL_ROOT")
+            or Path(__file__).resolve().parents[1] / "models"
+        )
         self._models = {}
         # Bound memory/CPU use and avoid duplicate model loading on concurrent requests.
         self._lock = threading.Lock()

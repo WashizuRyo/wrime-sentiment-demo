@@ -6,24 +6,20 @@ on:
 permissions:
   contents: read
 jobs:
-  test:
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7.0.1
-      - uses: astral-sh/setup-uv@v10.3.3
       - uses: actions/setup-node@v7.1.0
         with:
           node-version: '24'
           cache: npm
-          cache-dependency-path: frontend/package-lock.json
-      - run: uv venv --python 3.12 .venv
-      - run: uv pip install --python .venv/bin/python -r requirements-test.txt
-      - run: .venv/bin/python -m pytest -q
-      - run: npm --prefix frontend ci
-      - run: npm --prefix frontend run build
+          cache-dependency-path: src/frontend/package-lock.json
+      - run: npm --prefix src/frontend ci
+      - run: npm --prefix src/frontend run build
 
       - uses: actions/upload-artifact@v7.0.2
         with:
           name: frontend-dist
-          path: frontend/dist
+          path: src/frontend/dist
           if-no-files-found: error

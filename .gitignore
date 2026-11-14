@@ -1,15 +1,11 @@
 .venv/
 __pycache__/
 *.pyc
-.pytest_cache/
 .env
 .local/
-models/
 node_modules/
 dist/
 .DS_Store
+/src/models/
 *.safetensors
 *.bin
-
-frontend/test-results/
-frontend/playwright-report/

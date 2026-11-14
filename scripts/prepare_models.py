@@ -17,7 +17,11 @@ def main():
         required=True,
         help="Local Gemma snapshot with original weights",
     )
-    parser.add_argument("--output", type=Path, default=Path("models"))
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=Path(__file__).resolve().parents[1] / "src" / "models",
+    )
     args = parser.parse_args()
     import torch
     from peft import PeftModel

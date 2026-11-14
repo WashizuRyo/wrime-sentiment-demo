@@ -1,0 +1,10 @@
+**
+!backend/
+!backend/__init__.py
+!backend/inference.py
+!infra/
+!infra/lambda-benchmark/
+!infra/lambda-benchmark/handler.py
+!models/
+!models/lora/
+!models/lora/**
