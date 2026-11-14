@@ -9,3 +9,5 @@ dist/
 /src/models/
 *.safetensors
 *.bin
+cdk.out/
+cdk.context.json

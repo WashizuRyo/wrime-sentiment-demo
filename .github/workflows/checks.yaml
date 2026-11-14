@@ -14,7 +14,12 @@ jobs:
         with:
           node-version: '24'
           cache: npm
-          cache-dependency-path: src/frontend/package-lock.json
+          cache-dependency-path: |
+            src/frontend/package-lock.json
+            src/infra/package-lock.json
+      - run: npm --prefix src/infra ci
+      - run: npm --prefix src/infra run check
+      - run: npm --prefix src/infra run synth
       - run: npm --prefix src/frontend ci
       - run: npm --prefix src/frontend run build
 

@@ -104,12 +104,24 @@ GitHub Actionsでも画面のビルドを実行し、`frontend-dist` 成果物�
 src/
   backend/   FastAPI・モデルの推論処理
   frontend/  Reactの画面・Vite設定
-  infra/     Lambda用コンテナ・ハンドラー・実行手順
+  infra/     TypeScriptのCDK定義・Lambda用コンテナ・実行手順
   models/    LoRA・Full FTの推論用モデル（Git管理外）
-scripts/     モデル準備・Lambdaの構築と計測
+scripts/     モデル準備
 ```
 
 AWS Lambda + ECRでも統合LoRAモデルの推論を検証済み。
 フロントは配置せず、AWS CLIで初回・再実行を計測し、一時リソースは削除した。
 初回応答は約14〜67秒、起動済み環境では約0.57〜0.77秒だった。
+インフラはTypeScriptのAWS CDKで定義している。`make infra-check` で型とCloudFormationテンプレートを確認できる。
+デプロイ・呼び出し・削除の手順は以下を参照。
+
+```bash
+make bootstrap # 初回のみ（make setupで依存をインストール後）
+make deploy   # Dockerイメージのビルド・push・AWSへの配置
+make invoke   # 推論結果を確認
+make destroy  # Lambda・ログを削除後、このアプリのECRタグも削除
+```
+
+Dockerの起動・モデルの準備・AWS認証が必要。モデル入りイメージはCDK共用ECRに保存する。`make destroy` でこのアプリの接頭辞付きタグも削除する（変更前の接頭辞なしイメージは対象外）。
+
 [構成と再実行手順](src/infra/lambda-benchmark/README.md)

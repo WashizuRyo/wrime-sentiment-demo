@@ -1,10 +1,16 @@
 **
 !backend/
+backend/**
 !backend/__init__.py
 !backend/inference.py
 !infra/
+infra/**
 !infra/lambda-benchmark/
+infra/lambda-benchmark/**
 !infra/lambda-benchmark/handler.py
+!infra/lambda-benchmark/Dockerfile
 !models/
+models/**
 !models/lora/
 !models/lora/**
+!.dockerignore
