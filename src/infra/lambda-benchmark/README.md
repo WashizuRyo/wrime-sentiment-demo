@@ -54,22 +54,25 @@ make destroy
 ```
 
 まずCDKでLambda・実行ロール・ログを削除する。ログ保持期間は1日で、スタック削除時にも削除する。
-続いて `scripts/delete-images.mjs` が以下を実行する。
+続いて `scripts/delete-assets.mjs` が以下を実行する。
 
 1. `WrimeInference` スタックが存在しないことを確認（キャンセル時や確認失敗時はイメージを消さない）
-2. `CDKToolkit` の出力から共用ECR名を取得
+2. `CDKToolkit` の出力から共用ECR名とS3バケット名を取得
 3. ECRから `wrime-sentiment-demo-` で始まるタグを全件取得し、100件ずつ削除
+4. 共用S3の `wrime-sentiment-demo/` 以下の全バージョン・削除マーカーを取得し、1,000件ずつ削除
 
 更新前の同じ接頭辞のタグも対象になり、ローカルでの履歴保存は不要。
 同じ接頭辞を別アプリや別環境に流用しない。
 ダイジェスト指定での削除は行わない。同じイメージに別アプリのタグがある場合、そのタグは残る。
 最後のタグが削除されるとイメージ自体も削除される。共用ECR自体は削除しない。
 途中で失敗した場合は再度 `make destroy` を実行できる。
-`cdk destroy` を直接実行した場合はイメージ削除を行わないので、削除には `make destroy` を使う。
+`cdk destroy` を直接実行した場合はECR・S3の後片付けを行わないので、削除には `make destroy` を使う。
 
-この変更前にpushした、接頭辞のない古いイメージは自動削除対象外。必要なら個別に確認して削除する。
+S3の保存先は標準 `DefaultStackSynthesizer` の `bucketPrefix` で `wrime-sentiment-demo/` 以下に限定する。
+この変更は次回 `make deploy` から反映される。
+変更前の接頭辞なしイメージ・S3オブジェクトは自動削除対象外。必要なら個別に確認して削除する。
 
-`CDKToolkit`・共用S3・ECR・IAMも残る。S3内のデプロイ用テンプレート等は別途保存料金の対象となる。
+`CDKToolkit`・共用S3・ECR・IAMも残る。このアプリの接頭辞外に残るS3オブジェクト等は別途保存料金の対象となる。
 手元のDockerイメージ・ビルドキャッシュも自動削除しない。
 
 以前の専用ECR構成をデプロイしている場合、その `WrimeImages` スタックは新構成の `make destroy` では消えない。

@@ -5,6 +5,7 @@ import { InferenceStack } from '../lib/inference-stack';
 const app = new App({
   defaultStackSynthesizer: new DefaultStackSynthesizer({
     dockerTagPrefix: 'wrime-sentiment-demo-',
+    bucketPrefix: 'wrime-sentiment-demo/',
   }),
 });
 new InferenceStack(app, 'WrimeInference', {

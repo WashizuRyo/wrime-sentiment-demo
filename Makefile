@@ -33,4 +33,4 @@ invoke:
 
 destroy:
 	npm --prefix src/infra run cdk -- destroy --all
-	node scripts/delete-images.mjs
+	node scripts/delete-assets.mjs

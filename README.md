@@ -119,9 +119,9 @@ AWS Lambda + ECRでも統合LoRAモデルの推論を検証済み。
 make bootstrap # 初回のみ（make setupで依存をインストール後）
 make deploy   # Dockerイメージのビルド・push・AWSへの配置
 make invoke   # 推論結果を確認
-make destroy  # Lambda・ログを削除後、このアプリのECRタグも削除
+make destroy  # Lambda・ログ、このアプリのECRタグ・S3オブジェクトを削除
 ```
 
-Dockerの起動・モデルの準備・AWS認証が必要。モデル入りイメージはCDK共用ECRに保存する。`make destroy` でこのアプリの接頭辞付きタグも削除する（変更前の接頭辞なしイメージは対象外）。
+Dockerの起動・モデルの準備・AWS認証が必要。モデル入りイメージはCDK共用ECRに保存する。`make destroy` でこのアプリの接頭辞付きECRタグ・S3オブジェクトの全バージョンも削除する（変更前の接頭辞なしデータは対象外）。
 
 [構成と再実行手順](src/infra/lambda-benchmark/README.md)
