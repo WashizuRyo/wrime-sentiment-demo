@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState, type FormEvent } from "react";
 import { createRoot } from "react-dom/client";
 import "./style.css";
 
@@ -8,11 +8,37 @@ const classes = [
   ["0", "中立"],
   ["1", "肯定"],
   ["2", "強い肯定"],
+] as const;
+type Method = "lora" | "full";
+type Selection = Method | "both";
+type Sentiment = -2 | -1 | 0 | 1 | 2;
+type Prediction = {
+  model: Method;
+  model_version: string;
+  sentiment: Sentiment;
+  probabilities: Record<`${Sentiment}`, number>;
+  truncated: boolean;
+  elapsed_ms: number;
+};
+type ResultProps = {
+  method: Method;
+  result: Prediction | undefined;
+  error: string | undefined;
+};
+const choices: [Selection, string][] = [
+  ["both", "両方"],
+  ["lora", "LoRA"],
+  ["full", "Full FT"],
 ];
 const names = { lora: "LoRA", full: "Full FT" };
-const apiBase = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
+let apiBase = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
+let enabledMethods: Method[] = ["lora", "full"];
 
-async function predict(text, method) {
+function isMethod(value: unknown): value is Method {
+  return value === "lora" || value === "full";
+}
+
+async function predict(text: string, method: Method): Promise<Prediction> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 120000);
   try {
@@ -33,9 +59,9 @@ async function predict(text, method) {
       );
       throw error;
     }
-    return result;
+    return result as Prediction;
   } catch (error) {
-    if (error.name === "AbortError") throw new Error("タイムアウトしました。");
+    if (error instanceof Error && error.name === "AbortError") throw new Error("タイムアウトしました。");
     if (error instanceof TypeError) throw new Error("接続できません。");
     throw error;
   } finally {
@@ -43,8 +69,7 @@ async function predict(text, method) {
   }
 }
 
-function Result({ method, result, error }) {
-  const sentiment = result?.sentiment;
+function Result({ method, result, error }: ResultProps) {
   return (
     <section className="result-card" aria-label={`${names[method]}の結果`}>
       <div className="card-heading">
@@ -58,15 +83,15 @@ function Result({ method, result, error }) {
         <>
           <div className="prediction">
             <strong>
-              {sentiment > 0 ? "+" : ""}
-              {sentiment}
+              {result.sentiment > 0 ? "+" : ""}
+              {result.sentiment}
             </strong>
-            <span>{classes.find(([id]) => Number(id) === sentiment)[1]}</span>
+            <span>{classes.find(([id]) => Number(id) === result.sentiment)?.[1]}</span>
           </div>
           <div className="probabilities">
             {classes.map(([id, label]) => (
               <div
-                className={`prob-row ${Number(id) === sentiment ? "selected" : ""}`}
+                className={`prob-row ${Number(id) === result.sentiment ? "selected" : ""}`}
                 key={id}
               >
                 <span>{label}</span>
@@ -94,17 +119,17 @@ function Result({ method, result, error }) {
 
 function App() {
   const [text, setText] = useState("");
-  const [method, setMethod] = useState("both");
+  const [method, setMethod] = useState<Selection>(enabledMethods.length > 1 ? "both" : enabledMethods[0]);
   const [busy, setBusy] = useState(false);
-  const [results, setResults] = useState({});
-  const [errors, setErrors] = useState({});
+  const [results, setResults] = useState<Partial<Record<Method, Prediction>>>({});
+  const [errors, setErrors] = useState<Partial<Record<Method, string>>>({});
   const [hasRun, setHasRun] = useState(false);
-  const [visibleMethods, setVisibleMethods] = useState(["lora", "full"]);
+  const [visibleMethods, setVisibleMethods] = useState(enabledMethods);
 
-  async function analyze(event) {
+  async function analyze(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!text.trim() || busy) return;
-    const methods = method === "both" ? ["lora", "full"] : [method];
+    const methods = method === "both" ? enabledMethods : [method];
     setBusy(true);
     setResults({});
     setErrors({});
@@ -119,7 +144,7 @@ function App() {
           } catch (error) {
             setErrors((previous) => ({
               ...previous,
-              [selected]: error.message || "接続できません。",
+              [selected]: error instanceof Error ? error.message : "接続できません。",
             }));
           }
         }),
@@ -154,11 +179,9 @@ function App() {
         <div className="form-bottom">
           <fieldset disabled={busy}>
             <legend>モデル</legend>
-            {[
-              ["both", "両方"],
-              ["lora", "LoRA"],
-              ["full", "Full FT"],
-            ].map(([value, label]) => (
+            {choices.filter(([value]) => value === "both"
+              ? enabledMethods.length > 1 : enabledMethods.includes(value)
+            ).map(([value, label]) => (
               <label
                 className={`choice ${method === value ? "active" : ""}`}
                 key={value}
@@ -205,4 +228,24 @@ function App() {
   );
 }
 
-createRoot(document.getElementById("root")).render(<App />);
+const rootElement = document.getElementById("root");
+if (!rootElement) throw new Error("Root element unavailable");
+const root = createRoot(rootElement);
+async function start() {
+  if (import.meta.env.PROD) {
+    const response = await fetch("/config.json", { cache: "no-store" });
+    if (!response.ok) throw new Error("Configuration unavailable");
+    const config = await response.json() as { methods?: unknown; apiBaseUrl?: unknown };
+    if (!Array.isArray(config.methods) || !config.methods.length
+      || !config.methods.every(isMethod)
+      || typeof config.apiBaseUrl !== "string") {
+      throw new Error("Invalid configuration");
+    }
+    apiBase = (import.meta.env.VITE_API_BASE_URL || config.apiBaseUrl).replace(/\/$/, "");
+    enabledMethods = config.methods;
+  }
+  root.render(<App />);
+}
+start().catch(() => {
+  root.render(<p role="alert">設定を読み込めませんでした。ページを再読み込みしてください。</p>);
+});

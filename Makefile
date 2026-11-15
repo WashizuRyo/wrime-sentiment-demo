@@ -4,13 +4,11 @@ export AWS_REGION := $(AWS_DEFAULT_REGION)
 
 .PHONY: setup api frontend build infra-check bootstrap deploy invoke destroy
 setup:
-	uv venv --python 3.12 .venv
-	uv pip install --python .venv/bin/python -r requirements.lock
-	npm --prefix src/frontend ci
-	npm --prefix src/infra ci
+	uv venv --python 3.12 src/backend/.venv
+	uv pip install --python src/backend/.venv/bin/python -r src/backend/requirements.lock
 
 api:
-	HF_HUB_OFFLINE=1 TOKENIZERS_PARALLELISM=false .venv/bin/python -m uvicorn backend.local:app --app-dir src --host 127.0.0.1 --port 8000
+	src/backend/.venv/bin/python -m uvicorn backend.local:app --app-dir src --host 127.0.0.1 --port 8000
 
 frontend:
 	npm --prefix src/frontend run dev
@@ -18,19 +16,19 @@ frontend:
 build:
 	npm --prefix src/frontend run build
 
-infra-check:
+infra-check: build
 	npm --prefix src/infra run check
 	npm --prefix src/infra run synth
 
-bootstrap:
+bootstrap: build
 	npm --prefix src/infra run cdk -- bootstrap
 
-deploy:
+deploy: build
 	npm --prefix src/infra run cdk -- deploy
 
 invoke:
 	bash scripts/invoke-lambda.sh
 
-destroy:
+destroy: build
 	npm --prefix src/infra run cdk -- destroy --all
 	node scripts/delete-assets.mjs

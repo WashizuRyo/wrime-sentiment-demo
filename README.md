@@ -13,7 +13,11 @@ WRIME Ver.2で追加学習したGemma 3 270MのLoRA・Full FTを比較する。
 
 ```bash
 make setup
+npm --prefix src/frontend ci
+npm --prefix src/infra ci
 ```
+
+Pythonの依存定義（`requirements.txt`・`requirements.lock`）と仮想環境（`.venv/`）は `src/backend/` に配置する。
 
 モデル準備済みなら、ターミナルを2つ使って起動する。
 
@@ -45,14 +49,14 @@ macOSでXcodeライセンスのエラーが出る場合、インストール済�
 - 元の `google/gemma-3-270m` のローカルスナップショット（重み・設定）
 
 ```bash
-.venv/bin/python scripts/prepare_models.py \
+src/backend/.venv/bin/python scripts/prepare_models.py \
   --thesis-root /path/to/sentimental \
   --base-model /path/to/local/gemma-3-270m-snapshot
 ```
 
 LoRAは分類ヘッドを含むアダプタを統合し、統合前後のlogitsを比較する。
 `src/models/lora` と `src/models/full` に推論用ファイルを作る。保存には約2.1GB必要。
-既存の出力は上書きしない。別の保存先は `--output`、APIの読み込み先は `WRIME_MODEL_ROOT` で指定できる。
+既存の出力は上書きしない。準備スクリプトの保存先は `--output` で変更できるが、APIの読み込み先は `src/models/` に固定している。
 モデルは起動後に初めて使う際に読み込み、以降はメモリ上で再利用する。
 モデルはローカルに保持し、`src/models/` と重みファイルはGitの管理対象から除外する。
 
@@ -96,7 +100,7 @@ curl http://127.0.0.1:8000/predict/lora \
 make build
 ```
 
-GitHub Actionsでも画面のビルドを実行し、`frontend-dist` 成果物を保存する。
+GitHub Actionsではフロントの型チェック（`npm --prefix src/frontend run check`）とビルドを実行する。
 
 ## ファイル構成
 
@@ -109,19 +113,22 @@ src/
 scripts/     モデル準備
 ```
 
-AWS Lambda + ECRでも統合LoRAモデルの推論を検証済み。
-フロントは配置せず、AWS CLIで初回・再実行を計測し、一時リソースは削除した。
+AWS Lambda + ECRで統合LoRAモデルの推論を検証済み。
+AWS公開時はS3 + CloudFrontで画面を配信し、ブラウザからLambda Function URLを呼び出す。
+公開版はLoRAのみ。ローカル版はLoRA・Full FTの比較に対応する。
 初回応答は約14〜67秒、起動済み環境では約0.57〜0.77秒だった。
 インフラはTypeScriptのAWS CDKで定義している。`make infra-check` で型とCloudFormationテンプレートを確認できる。
 デプロイ・呼び出し・削除の手順は以下を参照。
 
 ```bash
-make bootstrap # 初回のみ（make setupで依存をインストール後）
-make deploy   # Dockerイメージのビルド・push・AWSへの配置
+make bootstrap # 初回のみ（上記の依存をインストール後）
+make deploy   # フロントのビルド・配置、推論Lambdaのビルド・配置
 make invoke   # 推論結果を確認
-make destroy  # Lambda・ログ、このアプリのECRタグ・S3オブジェクトを削除
+make destroy  # CloudFront・フロントS3（中身含む）・Lambda・アセットを削除
 ```
 
-Dockerの起動・モデルの準備・AWS認証が必要。モデル入りイメージはCDK共用ECRに保存する。`make destroy` でこのアプリの接頭辞付きECRタグ・S3オブジェクトの全バージョンも削除する（変更前の接頭辞なしデータは対象外）。
+`make deploy` の出力 `FrontendUrl` をブラウザで開く。APIのURLはデプロイ時に `config.json` へ自動設定される。
+Function URLは認証なしの公開APIで、CORSはCloudFrontの画面だけを許可する（CORSは認証ではない）。
+使い終わったら `make destroy` を実行する。CloudFrontの削除には時間がかかる場合がある。
 
-[構成と再実行手順](src/infra/lambda-benchmark/README.md)
+Dockerの起動・モデルの準備・AWS認証が必要。モデル入りイメージはCDK共用ECRに保存する。`make destroy` でこのアプリの接頭辞付きECRタグ・S3オブジェクトの全バージョンも削除する（変更前の接頭辞なしデータは対象外）。

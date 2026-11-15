@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process';
 
 const imagePrefix = 'wrime-sentiment-demo-';
 const filePrefix = 'wrime-sentiment-demo/';
+const logPrefixes = ['WrimeInference-', '/aws/lambda/WrimeInference-'];
 const aws = (args, input) => spawnSync('aws', [...args, '--output', 'json'], {
   input,
   encoding: 'utf8',
@@ -23,8 +24,9 @@ try {
   const stack = aws(['cloudformation', 'describe-stacks', '--stack-name', 'WrimeInference']);
   if (stack.error) throw stack.error;
   if (stack.status === 0 || !stack.stderr.includes('does not exist')) {
-    throw new Error('Lambdaスタックの削除を確認できないため、イメージ・S3オブジェクトは削除しません。' + stack.stderr);
+    throw new Error('スタックの削除を確認できないため、ログ・イメージ・S3オブジェクトは削除しません。' + stack.stderr);
   }
+
   const bootstrap = json(['cloudformation', 'describe-stacks', '--stack-name', 'CDKToolkit']);
   const repository = bootstrap.Stacks[0].Outputs.find(
     output => ['ImageRepositoryName', 'ContainerAssetsRepositoryName'].includes(output.OutputKey),
@@ -59,6 +61,23 @@ try {
     if (result.Errors?.length) throw new Error(JSON.stringify(result.Errors));
   }
   console.log(`${bucket}/${filePrefix}: オブジェクトのバージョン・削除マーカーを${objects.length}件削除しました。`);
+
+  // Lambda can create log groups outside CloudFormation or recreate them while
+  // finishing a Delete invocation. Clean up this app's prefixes after destroy.
+  let deletedLogs = 0;
+  for (const prefix of logPrefixes) {
+    const groups = json(['logs', 'describe-log-groups', '--log-group-name-prefix', prefix]).logGroups
+      .filter(group => group.logGroupName.startsWith(prefix));
+    for (const group of groups) {
+      try {
+        json(['logs', 'delete-log-group', '--log-group-name', group.logGroupName]);
+        deletedLogs++;
+      } catch (error) {
+        if (!error.message.includes('(ResourceNotFoundException)')) throw error;
+      }
+    }
+  }
+  console.log(`このアプリのロググループを${deletedLogs}件削除しました。`);
 } catch (error) {
   console.error(error.message);
   process.exitCode = 1;

@@ -9,22 +9,28 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7.0.1
-      - uses: actions/setup-node@v7.1.0
+      - name: Checkout repository
+        uses: actions/checkout@v7.0.1
+      - name: Set up Node.js
+        uses: actions/setup-node@v7.1.0
         with:
           node-version: '24'
           cache: npm
           cache-dependency-path: |
             src/frontend/package-lock.json
             src/infra/package-lock.json
-      - run: npm --prefix src/infra ci
-      - run: npm --prefix src/infra run check
-      - run: npm --prefix src/infra run synth
-      - run: npm --prefix src/frontend ci
-      - run: npm --prefix src/frontend run build
 
-      - uses: actions/upload-artifact@v7.0.2
-        with:
-          name: frontend-dist
-          path: src/frontend/dist
-          if-no-files-found: error
+      - name: Install infrastructure dependencies
+        run: npm --prefix src/infra ci
+      - name: Type-check infrastructure
+        run: npm --prefix src/infra run check
+
+      - name: Install frontend dependencies
+        run: npm --prefix src/frontend ci
+      - name: Type-check frontend
+        run: npm --prefix src/frontend run check
+      - name: Build frontend
+        run: npm --prefix src/frontend run build
+
+      - name: Synthesize CloudFormation template
+        run: npm --prefix src/infra run synth
