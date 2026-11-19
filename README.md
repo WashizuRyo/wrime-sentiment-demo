@@ -99,7 +99,7 @@ AWS版もLoRA・Full FT・両方の比較に対応する。S3 + CloudFrontで画
 Lambdaコンテナに両モデルを同梱する。ブラウザは画面と同じCloudFrontドメインの
 `POST /predict/lora` または `POST /predict/full` を呼び出す。
 CloudFrontはOACでリクエストを署名し、IAM認証付きのLambda Function URLへ転送する。
-AWS版の画面はPOST本文のSHA-256を `x-amz-content-sha256` ヘッダーに付ける。
+画面はOAC経由の推論に必要なPOST本文のSHA-256を `x-amz-content-sha256` ヘッダーに付ける。
 Lambdaのメモリは3008MBを割り当てる。Dockerの起動・両モデルの準備・AWS認証が必要。
 
 ```bash

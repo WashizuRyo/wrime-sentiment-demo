@@ -67,16 +67,7 @@ export class InferenceStack extends cdk.Stack {
     const frontendUrl = `https://${distribution.distributionDomainName}`;
 
     new deployment.BucketDeployment(this, 'FrontendDeployment', {
-      sources: [
-        deployment.Source.asset(path.join(__dirname, '../../frontend/dist'), {
-          exclude: ['config.json'],
-        }),
-        deployment.Source.jsonData('config.json', {
-          apiBaseUrl: '',
-          requirePayloadHash: true,
-          methods: ['lora', 'full'],
-        }),
-      ],
+      sources: [deployment.Source.asset(path.join(__dirname, '../../frontend/dist'))],
       destinationBucket: bucket,
       distribution,
       distributionPaths: ['/*'],

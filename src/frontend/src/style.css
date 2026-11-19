@@ -1,14 +1,17 @@
 :root {
-  color-scheme: dark;
-  --background: #111815;
-  --surface: #1a2420;
-  --input: #141d19;
-  --border: #405249;
-  --text: #e5eee8;
-  --muted: #acbdb2;
-  --accent: #9cd6b0;
-  --selected: #293f32;
-  --track: #35453c;
+  color-scheme: light;
+  --background: #eef4ff;
+  --surface: #ffffff;
+  --border: #c5d4ec;
+  --text: #14264b;
+  --muted: #435778;
+  --accent: #1949ba;
+  --yellow-soft: #fff4c3;
+  --yellow: #e6b62b;
+  --gold: #a47100;
+  --pink-soft: #fff0f7;
+  --pink: #e96f9b;
+  --track: #e0eafb;
   font-family:
     -apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN", sans-serif;
   color: var(--text);
@@ -34,9 +37,13 @@ button:disabled {
   cursor: default;
   opacity: 0.55;
 }
-button:focus-visible,
-textarea:focus-visible {
+button:focus-visible {
   outline: 3px solid var(--accent);
+  outline-offset: 4px;
+}
+textarea:focus-visible,
+.choice input:focus-visible {
+  outline: 3px solid var(--gold);
   outline-offset: 4px;
 }
 main {
@@ -49,6 +56,7 @@ header {
 }
 h1 {
   margin: 0;
+  color: var(--accent);
   font-size: 22px;
   font-weight: 600;
 }
@@ -58,6 +66,7 @@ h1 {
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 24px;
+  box-shadow: 0 4px 16px #14264b0d;
 }
 .input-heading {
   display: flex;
@@ -75,7 +84,7 @@ h1 {
   color: var(--muted);
 }
 ::selection {
-  background: #45634e;
+  background: var(--yellow-soft);
   color: var(--text);
 }
 textarea {
@@ -86,7 +95,7 @@ textarea {
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 14px;
-  background: var(--input);
+  background: var(--surface);
   color: inherit;
   font-size: 15px;
 }
@@ -114,6 +123,7 @@ legend {
   display: flex;
   align-items: center;
   gap: 5px;
+  color: #171717;
   font-size: 12px;
   padding: 8px 11px;
   border: 1px solid var(--border);
@@ -121,53 +131,51 @@ legend {
   cursor: pointer;
 }
 .choice.active {
-  background: var(--selected);
-  border-color: var(--accent);
-  color: var(--accent);
+  background: var(--yellow-soft);
+  border-color: var(--gold);
 }
 .choice input {
-  accent-color: var(--accent);
+  accent-color: var(--gold);
   margin: 0;
 }
 .submit {
   min-width: 100px;
   border: 0;
   border-radius: 8px;
-  background: var(--accent);
-  color: #14251b;
+  background: var(--yellow);
+  color: var(--text);
   font-size: 14px;
   padding: 12px 20px;
 }
 .results {
   margin-top: 24px;
 }
-.results > h2 {
-  font-size: 16px;
-  font-weight: 600;
-  margin: 0 0 12px;
-}
 .result-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
 }
+.card-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
 .card-heading h3 {
   margin: 0;
+  color: var(--accent);
   font-size: 16px;
 }
 .prediction {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 16px 0;
-}
-.prediction strong {
-  font-size: 36px;
+  margin: 0;
+  color: var(--pink);
+  font-size: 24px;
   line-height: 1.2;
-  font-weight: 500;
+  font-weight: 700;
+  text-align: right;
 }
-.prediction > span {
-  font-size: 16px;
+.probabilities {
+  padding-top: 8px;
 }
 .prob-row {
   display: grid;
@@ -190,23 +198,26 @@ legend {
 }
 .track > div {
   height: 100%;
-  background: #728d7b;
+  background: var(--yellow);
   border-radius: 5px;
 }
 .selected {
-  color: var(--accent);
+  color: var(--pink);
+  font-weight: 600;
 }
 .selected .track > div {
-  background: var(--accent);
+  background: var(--pink);
 }
 .notice,
 .error {
   font-size: 12px;
-  color: #ffbb9c;
-}
-.pending {
-  font-size: 12px;
   color: var(--muted);
+}
+.error {
+  background: var(--pink-soft);
+  border-left: 3px solid var(--pink);
+  color: var(--text);
+  padding: 8px 12px;
 }
 @media (max-width: 640px) {
   main {

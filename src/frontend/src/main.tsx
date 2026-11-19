@@ -1,15 +1,16 @@
-import { useState, type FormEvent } from "react";
+import { useState, useTransition, type SubmitEvent } from "react";
 import { createRoot } from "react-dom/client";
 import "./style.css";
 
 const classes = [
-  ["-2", "強い否定"],
-  ["-1", "否定"],
-  ["0", "中立"],
-  ["1", "肯定"],
   ["2", "強い肯定"],
+  ["1", "肯定"],
+  ["0", "中立"],
+  ["-1", "否定"],
+  ["-2", "強い否定"],
 ] as const;
-type Method = "lora" | "full";
+const methods = ["lora", "full"] as const;
+type Method = (typeof methods)[number];
 type Selection = Method | "both";
 type Sentiment = -2 | -1 | 0 | 1 | 2;
 type Prediction = {
@@ -25,34 +26,23 @@ type ResultProps = {
   result: Prediction | undefined;
   error: string | undefined;
 };
-const choices: [Selection, string][] = [
-  ["both", "両方"],
-  ["lora", "LoRA"],
-  ["full", "Full FT"],
-];
-const names = { lora: "LoRA", full: "Full FT" };
-let apiBase = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
-let requirePayloadHash = false;
-let enabledMethods: Method[] = ["lora", "full"];
-
-function isMethod(value: unknown): value is Method {
-  return value === "lora" || value === "full";
-}
+const choices = ["both", ...methods] as const;
+const names = { both: "両方", lora: "LoRA", full: "Full FT" };
 
 async function predict(text: string, method: Method): Promise<Prediction> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 120000);
   try {
     const body = JSON.stringify({ text });
-    const headers = new Headers({ "Content-Type": "application/json" });
-    if (requirePayloadHash) {
-      const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(body));
-      const hex = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
-      headers.set("x-amz-content-sha256", hex);
-    }
-    const response = await fetch(`${apiBase}/predict/${method}`, {
+    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(body));
+    const payloadHash = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+    const response = await fetch(`/predict/${method}`, {
       method: "POST",
-      headers,
+      headers: {
+        "Content-Type": "application/json",
+        // CloudFront OAC requires the payload hash for POST requests to Lambda Function URLs.
+        "x-amz-content-sha256": payloadHash,
+      },
       body,
       signal: controller.signal,
     });
@@ -79,20 +69,18 @@ function Result({ method, result, error }: ResultProps) {
     <section className="result-card" aria-label={`${names[method]}の結果`}>
       <div className="card-heading">
         <h3>{names[method]}</h3>
+        {!error && result && (
+          <p className="prediction">
+            {classes.find(([id]) => Number(id) === result.sentiment)?.[1]}
+          </p>
+        )}
       </div>
       {error ? (
         <p className="error" role="alert">
           {error}
         </p>
-      ) : result ? (
+      ) : result && (
         <>
-          <div className="prediction">
-            <strong>
-              {result.sentiment > 0 ? "+" : ""}
-              {result.sentiment}
-            </strong>
-            <span>{classes.find(([id]) => Number(id) === result.sentiment)?.[1]}</span>
-          </div>
           <div className="probabilities">
             {classes.map(([id, label]) => (
               <div
@@ -113,10 +101,6 @@ function Result({ method, result, error }: ResultProps) {
             <p className="notice">512トークンで切り詰めました。</p>
           )}
         </>
-      ) : (
-        <p className="pending" role="status">
-          分析中…
-        </p>
       )}
     </section>
   );
@@ -124,39 +108,39 @@ function Result({ method, result, error }: ResultProps) {
 
 function App() {
   const [text, setText] = useState("");
-  const [method, setMethod] = useState<Selection>(enabledMethods.length > 1 ? "both" : enabledMethods[0]);
-  const [busy, setBusy] = useState(false);
+  const [method, setMethod] = useState<Selection>("both");
+  const [isPending, startTransition] = useTransition();
   const [results, setResults] = useState<Partial<Record<Method, Prediction>>>({});
   const [errors, setErrors] = useState<Partial<Record<Method, string>>>({});
-  const [hasRun, setHasRun] = useState(false);
-  const [visibleMethods, setVisibleMethods] = useState(enabledMethods);
+  const completedMethods = methods.filter(
+    (selected) => results[selected] !== undefined || errors[selected] !== undefined,
+  );
 
-  async function analyze(event: FormEvent<HTMLFormElement>) {
+  function analyze(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!text.trim() || busy) return;
-    const methods = method === "both" ? enabledMethods : [method];
-    setBusy(true);
+    if (!text.trim() || isPending) return;
+    const selectedMethods = method === "both" ? methods : [method];
     setResults({});
     setErrors({});
-    setHasRun(true);
-    setVisibleMethods(methods);
-    try {
+    startTransition(async () => {
       await Promise.all(
-        methods.map(async (selected) => {
+        selectedMethods.map(async (selected) => {
           try {
             const result = await predict(text, selected);
-            setResults((previous) => ({ ...previous, [selected]: result }));
+            startTransition(() => {
+              setResults((previous) => ({ ...previous, [selected]: result }));
+            });
           } catch (error) {
-            setErrors((previous) => ({
-              ...previous,
-              [selected]: error instanceof Error ? error.message : "接続できません。",
-            }));
+            startTransition(() => {
+              setErrors((previous) => ({
+                ...previous,
+                [selected]: error instanceof Error ? error.message : "接続できません。",
+              }));
+            });
           }
         }),
       );
-    } finally {
-      setBusy(false);
-    }
+    });
   }
 
   return (
@@ -173,20 +157,15 @@ function App() {
           id="text"
           value={text}
           maxLength={10000}
-          disabled={busy}
-          onChange={(event) => {
-            setText(event.target.value);
-            setHasRun(false);
-          }}
+          disabled={isPending}
+          onChange={(event) => setText(event.target.value)}
           rows={4}
           required
         />
         <div className="form-bottom">
-          <fieldset disabled={busy}>
+          <fieldset disabled={isPending}>
             <legend>モデル</legend>
-            {choices.filter(([value]) => value === "both"
-              ? enabledMethods.length > 1 : enabledMethods.includes(value)
-            ).map(([value, label]) => (
+            {choices.map((value) => (
               <label
                 className={`choice ${method === value ? "active" : ""}`}
                 key={value}
@@ -196,29 +175,25 @@ function App() {
                   name="model"
                   value={value}
                   checked={method === value}
-                  onChange={() => {
-                    setMethod(value);
-                    setHasRun(false);
-                  }}
+                  onChange={() => setMethod(value)}
                 />
-                {label}
+                {names[value]}
               </label>
             ))}
           </fieldset>
           <button
             className="submit"
-            disabled={busy || !text.trim()}
+            disabled={isPending || !text.trim()}
             type="submit"
           >
-            {busy ? "分析中…" : "分析"}
+            {isPending ? "分析中…" : "分析"}
           </button>
         </div>
       </form>
-      {hasRun && (
-        <section className="results" aria-busy={busy}>
-          <h2>結果</h2>
+      {!isPending && completedMethods.length > 0 && (
+        <section className="results">
           <div className="result-grid">
-            {visibleMethods.map((selected) => (
+            {completedMethods.map((selected) => (
               <Result
                 key={selected}
                 method={selected}
@@ -235,27 +210,4 @@ function App() {
 
 const rootElement = document.getElementById("root");
 if (!rootElement) throw new Error("Root element unavailable");
-const root = createRoot(rootElement);
-async function start() {
-  if (import.meta.env.PROD) {
-    const response = await fetch("/config.json", { cache: "no-store" });
-    if (!response.ok) throw new Error("Configuration unavailable");
-    const config = await response.json() as {
-      methods?: unknown;
-      apiBaseUrl?: unknown;
-      requirePayloadHash?: unknown;
-    };
-    if (!Array.isArray(config.methods) || !config.methods.length
-      || !config.methods.every(isMethod)
-      || typeof config.apiBaseUrl !== "string") {
-      throw new Error("Invalid configuration");
-    }
-    requirePayloadHash = config.requirePayloadHash === true;
-    apiBase = requirePayloadHash ? "" : (import.meta.env.VITE_API_BASE_URL || config.apiBaseUrl).replace(/\/$/, "");
-    enabledMethods = config.methods;
-  }
-  root.render(<App />);
-}
-start().catch(() => {
-  root.render(<p role="alert">設定を読み込めませんでした。ページを再読み込みしてください。</p>);
-});
+createRoot(rootElement).render(<App />);
