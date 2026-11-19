@@ -22,6 +22,7 @@ export class InferenceStack extends cdk.Stack {
         ignoreMode: cdk.IgnoreMode.DOCKER,
       }),
       architecture: lambda.Architecture.ARM_64,
+      // Keep both float32 models cached alongside the inference runtime.
       memorySize: 3008,
       timeout: cdk.Duration.seconds(120),
       logGroup,
@@ -57,7 +58,7 @@ export class InferenceStack extends cdk.Stack {
         }),
         deployment.Source.jsonData('config.json', {
           apiBaseUrl: api.url,
-          methods: ['lora'],
+          methods: ['lora', 'full'],
         }),
       ],
       destinationBucket: bucket,

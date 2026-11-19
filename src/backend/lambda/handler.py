@@ -4,7 +4,7 @@ import base64
 import binascii
 import json
 
-from backend.inference import MAX_CHARS, ModelUnavailable, Predictor
+from backend.inference import MAX_CHARS, METHODS, ModelUnavailable, Predictor
 
 predictor = Predictor()
 
@@ -20,9 +20,10 @@ def response(status, payload):
 def handler(event, context):
     # Direct invocation returns the prediction without an HTTP response wrapper.
     if "requestContext" not in event:
-        return predictor.predict(event["text"], "lora")
+        return predictor.predict(event["text"], event.get("model", "lora"))
     http = event["requestContext"].get("http", {})
-    if http.get("path") != "/predict/lora":
+    method = {f"/predict/{name}": name for name in METHODS}.get(http.get("path"))
+    if method is None:
         return response(404, {"error": "Unknown model or path"})
     if http.get("method") != "POST":
         return response(405, {"error": "Use POST"})
@@ -41,7 +42,7 @@ def handler(event, context):
     except (ValueError, TypeError, UnicodeError, binascii.Error):
         return response(400, {"error": "Provide non-empty text (max 10000 characters)"})
     try:
-        return response(200, predictor.predict(text, "lora"))
+        return response(200, predictor.predict(text, method))
     except ModelUnavailable:
         return response(503, {"error": "Model is not prepared"})
     except Exception:
