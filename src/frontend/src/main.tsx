@@ -32,6 +32,7 @@ const choices: [Selection, string][] = [
 ];
 const names = { lora: "LoRA", full: "Full FT" };
 let apiBase = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
+let requirePayloadHash = false;
 let enabledMethods: Method[] = ["lora", "full"];
 
 function isMethod(value: unknown): value is Method {
@@ -42,24 +43,28 @@ async function predict(text: string, method: Method): Promise<Prediction> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 120000);
   try {
+    const body = JSON.stringify({ text });
+    const headers = new Headers({ "Content-Type": "application/json" });
+    if (requirePayloadHash) {
+      const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(body));
+      const hex = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+      headers.set("x-amz-content-sha256", hex);
+    }
     const response = await fetch(`${apiBase}/predict/${method}`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ text }),
+      headers,
+      body,
       signal: controller.signal,
     });
-    const result = await response.json();
     if (!response.ok) {
       const error = new Error(
         response.status === 503
           ? "モデルを読み込めません。"
-          : "分析に失敗しました。",
+          : response.status === 504 ? "タイムアウトしました。" : "分析に失敗しました。",
       );
       throw error;
     }
-    return result as Prediction;
+    return await response.json() as Prediction;
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") throw new Error("タイムアウトしました。");
     if (error instanceof TypeError) throw new Error("接続できません。");
@@ -235,13 +240,18 @@ async function start() {
   if (import.meta.env.PROD) {
     const response = await fetch("/config.json", { cache: "no-store" });
     if (!response.ok) throw new Error("Configuration unavailable");
-    const config = await response.json() as { methods?: unknown; apiBaseUrl?: unknown };
+    const config = await response.json() as {
+      methods?: unknown;
+      apiBaseUrl?: unknown;
+      requirePayloadHash?: unknown;
+    };
     if (!Array.isArray(config.methods) || !config.methods.length
       || !config.methods.every(isMethod)
       || typeof config.apiBaseUrl !== "string") {
       throw new Error("Invalid configuration");
     }
-    apiBase = (import.meta.env.VITE_API_BASE_URL || config.apiBaseUrl).replace(/\/$/, "");
+    requirePayloadHash = config.requirePayloadHash === true;
+    apiBase = requirePayloadHash ? "" : (import.meta.env.VITE_API_BASE_URL || config.apiBaseUrl).replace(/\/$/, "");
     enabledMethods = config.methods;
   }
   root.render(<App />);

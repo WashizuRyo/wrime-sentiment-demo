@@ -12,10 +12,13 @@ export class InferenceStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
+    const inferenceTimeout = cdk.Duration.seconds(120);
+
     const logGroup = new logs.LogGroup(this, 'Logs', {
       retention: logs.RetentionDays.ONE_DAY,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
+
     const fn = new lambda.DockerImageFunction(this, 'Function', {
       code: lambda.DockerImageCode.fromImageAsset(path.join(__dirname, '../..'), {
         file: 'backend/lambda/Dockerfile',
@@ -24,15 +27,21 @@ export class InferenceStack extends cdk.Stack {
       architecture: lambda.Architecture.ARM_64,
       // Keep both float32 models cached alongside the inference runtime.
       memorySize: 3008,
-      timeout: cdk.Duration.seconds(120),
+      timeout: inferenceTimeout,
       logGroup,
     });
+
+    const api = fn.addFunctionUrl({
+      authType: lambda.FunctionUrlAuthType.AWS_IAM,
+    });
+
     const bucket = new s3.Bucket(this, 'FrontendBucket', {
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       enforceSSL: true,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       autoDeleteObjects: true,
     });
+
     const distribution = new cloudfront.Distribution(this, 'Frontend', {
       defaultRootObject: 'index.html',
       defaultBehavior: {
@@ -40,24 +49,31 @@ export class InferenceStack extends cdk.Stack {
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
       },
-    });
-    distribution.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
-    const frontendUrl = `https://${distribution.distributionDomainName}`;
-    const api = fn.addFunctionUrl({
-      authType: lambda.FunctionUrlAuthType.NONE,
-      cors: {
-        allowedOrigins: [frontendUrl],
-        allowedMethods: [lambda.HttpMethod.POST],
-        allowedHeaders: ['content-type'],
+
+      additionalBehaviors: {
+        '/predict/*': {
+          origin: origins.FunctionUrlOrigin.withOriginAccessControl(api, {
+            readTimeout: inferenceTimeout,
+          }),
+          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.HTTPS_ONLY,
+          allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
+          cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
+          originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
+        },
       },
     });
+    distribution.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
+
+    const frontendUrl = `https://${distribution.distributionDomainName}`;
+
     new deployment.BucketDeployment(this, 'FrontendDeployment', {
       sources: [
         deployment.Source.asset(path.join(__dirname, '../../frontend/dist'), {
           exclude: ['config.json'],
         }),
         deployment.Source.jsonData('config.json', {
-          apiBaseUrl: api.url,
+          apiBaseUrl: '',
+          requirePayloadHash: true,
           methods: ['lora', 'full'],
         }),
       ],
@@ -69,8 +85,9 @@ export class InferenceStack extends cdk.Stack {
         removalPolicy: cdk.RemovalPolicy.DESTROY,
       }),
     });
+
     new cdk.CfnOutput(this, 'FrontendUrl', { value: frontendUrl });
-    new cdk.CfnOutput(this, 'ApiUrl', { value: api.url });
+    new cdk.CfnOutput(this, 'ApiUrl', { value: frontendUrl });
     new cdk.CfnOutput(this, 'FrontendBucketName', { value: bucket.bucketName });
     new cdk.CfnOutput(this, 'FunctionName', { value: fn.functionName });
     new cdk.CfnOutput(this, 'LogGroupName', { value: logGroup.logGroupName });
