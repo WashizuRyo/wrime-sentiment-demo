@@ -3,6 +3,10 @@
 日本語の文章を5段階の感情極性に分類するWebアプリ。
 [WRIME Ver.2](https://github.com/ids-cv/wrime)を使い、[Gemma 3 270M](https://huggingface.co/google/gemma-3-270m)を感情極性分類向けにLoRAとFull FTでそれぞれチューニングした2つのモデルの推論結果を比較する。
 
+## デモ
+
+![文章を入力し、LoRAとFull FTの感情分析結果を比較する画面収録](docs/demo.gif)
+
 ## 起動
 
 LoRAとFull FTの学習済みモデルは、容量が大きいためGitHubリポジトリに含めておらず、別途配布もしていません。リポジトリをクローンしただけではローカルで推論できません。以下の起動手順は、推論用モデルを手元に持っている場合に利用できます。
